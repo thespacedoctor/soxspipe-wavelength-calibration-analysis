@@ -61,7 +61,7 @@ The subfolder guide and the scripts predate the move of the extraction folders i
 
 ## Version control
 
-Git ignores FITS files and, for now, all three data folders above and `*.reg`. Because of this, the analysis scripts, the notebook, and the subfolder guide are not versioned.
+Git tracks code, the notebook, guides, and small tables only. It ignores FITS files, generated plots and reports (`*.png`, `*.pdf`, `*.html`), logs, the two VIS working directories, `*.reg`, and the data folders inside the analysis workspace (`2026-01/`, `extraction_archive/`, `project_data/`, `hitran_cache/`, `tmp/`, `results/plots/`, `*.tsv`). See `.gitignore`.
 
 ## Agent skills
 
