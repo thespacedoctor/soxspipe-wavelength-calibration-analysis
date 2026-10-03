@@ -4,12 +4,30 @@
 *.fit
 *.fz
 
+# GENERATED PLOTS, REPORTS AND LOGS
+*.pdf
+*.png
+*.html
+*.log
+
 # OS AND TOOLING
 .DS_Store
 .codegraph/
+.ipynb_checkpoints/
 
-# INVESTIGATION DATA AND PLOTS (IGNORED FOR NOW)
+# SOXSPIPE VIS WORKING DIRECTORIES (DATA ONLY)
 /2026_june_VIS_example/
 /VIS_attached_arc_example/
-/eso_soxspipe_wavelength_cal_investigation_plots/
+
+# REGION FILES
 /*.reg
+
+# ANALYSIS WORKSPACE: KEEP SCRIPTS, NOTEBOOK, GUIDE AND SMALL TABLES; IGNORE DATA
+/eso_soxspipe_wavelength_cal_investigation_plots/2026-01/
+/eso_soxspipe_wavelength_cal_investigation_plots/extraction_archive/
+/eso_soxspipe_wavelength_cal_investigation_plots/project_data/
+/eso_soxspipe_wavelength_cal_investigation_plots/hitran_cache/
+/eso_soxspipe_wavelength_cal_investigation_plots/tmp/
+/eso_soxspipe_wavelength_cal_investigation_plots/results/plots/
+/eso_soxspipe_wavelength_cal_investigation_plots/plots_*/
+/eso_soxspipe_wavelength_cal_investigation_plots/*.tsv
