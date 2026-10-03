@@ -7,3 +7,9 @@
 # OS AND TOOLING
 .DS_Store
 .codegraph/
+
+# INVESTIGATION DATA AND PLOTS (IGNORED FOR NOW)
+/2026_june_VIS_example/
+/VIS_attached_arc_example/
+/eso_soxspipe_wavelength_cal_investigation_plots/
+/*.reg
