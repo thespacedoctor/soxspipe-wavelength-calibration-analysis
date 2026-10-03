@@ -12,56 +12,42 @@ There is no build, lint, or test suite. Work consists of editing the constants a
 
 - Python dependencies (astropy, numpy, pandas, matplotlib, pygam) and the `soxspipe` CLI live in conda environments on this machine (e.g. `soxspipe`, `soxspipe_0.17.1`), not in this repo. The base `python3` lacks astropy and soxspipe, so activate an env first: `conda activate soxspipe`.
 - `soxspipe` is a separate, independently installed project. This repo only uses its CLI and its output FITS products.
-- `telluric_lines_from_hitran.py` also needs `hitran-api` (`hapi`) and network access to hitran.org. The HITRAN API is rate-limited, so it caches tables in `hitran_cache/`.
+- `shared/telluric_lines_from_hitran.py` also needs `hitran-api` (`hapi`) and network access to hitran.org. The HITRAN API is rate-limited, so it caches tables in `shared/hitran_cache/`.
 
 ## Layout
 
 - `input/`: source material for the project. Do not write into this folder.
 - `output/`: deliverables and project-adjacent files.
-- `eso_soxspipe_wavelength_cal_investigation_plots/`: the analysis workspace (scripts, notebook, reference tables, extracted spectra, plots). It has its own detailed guide at `eso_soxspipe_wavelength_cal_investigation_plots/.claude/CLAUDE.md` covering each script, the analysis method, and the standard stars' spectral lines. Read it before working there.
-- `2026_june_VIS_example/` and `VIS_attached_arc_example/`: two self-contained `soxspipe` VIS working directories (`raw/`, `sessions/base/`, `soxspipe.db`, with `sof`, `reduced`, `qc`, `soxspipe.yaml` and `soxspipe.log` symlinked into `sessions/base/`). Run `soxspipe` from inside the directory. Their `soxspipe.yaml` files differ only in `soxs-stare-std` → `sky-subtraction` → `subtract_sky` (`True` in the June example, `False` in the attached-arc example) and in the log path.
-- `20260707T071228_soxs_absorption_lines.reg`: a DS9 region file (physical pixel coordinates) labelling stellar absorption lines (Balmer series, Ca II H) on the `20260707T071228` exposure.
+- `soxs_uvvis_analysis/`: the UV-VIS notebook, reference tables, VIS spectra, results, reports, and two `soxspipe` VIS working directories. See `soxs_uvvis_analysis/README.md`.
+- `soxs_nir_analysis/`: the NIR script `soxs_telluric_wavelength_offsets.py`, `rerun.sh`, the HITRAN line list, NIR spectra, X-Shooter products, and `legacy/` (a superseded script). See `soxs_nir_analysis/README.md`.
+- `shared/`: `project_data/` (the 18 GB `soxspipe` working directory for both arms), `export.sh`, `cp_data.sh`, `telluric_lines_from_hitran.py`, and `hitran_cache/`. See `shared/README.md`.
+
+The READMEs hold the method, the settings, and the data sets. Read them before you change code. Do not copy their content into this file.
 
 ## Common commands
 
-Run from `eso_soxspipe_wavelength_cal_investigation_plots/`. The analysis scripts take no CLI arguments; set inputs by editing the `# INPUTS` block at the top of each file.
+All paths in the code are relative. Run each command from inside its own folder.
 
 ```bash
-python soxs_telluric_wavelength_offsets.py
-python soxs_plot_spectrum_tell_vs_xshooter_shift.py
-python telluric_lines_from_hitran.py --wmin 8000 --wmax 8400 --min-intensity 1e-25 --out telluric_8000_8400.py
+cd soxs_nir_analysis && python soxs_telluric_wavelength_offsets.py
+cd soxs_uvvis_analysis && jupyter lab
+cd shared && python telluric_lines_from_hitran.py --wmin 8000 --wmax 8400 --min-intensity 1e-25 --out telluric_8000_8400.py
 ```
 
-`telluric_lines_from_hitran.py` takes Angstroms and writes air wavelengths by default (`--vacuum` switches to vacuum). It writes the `--out` file plus a `.txt` copy.
-
-Re-reduce one exposure and re-run the offsets (the pattern in `rerun.sh`):
-
-```bash
-cd project_data/
-soxspipe stare sessions/base/sof/<SOF_NAME>.sof -x
-cp sessions/base/reduced/<DATE>/soxs-stare-std/<NAME>_EXTRACTED_MERGED.fits ../tmp/
-cd ..
-python soxs_telluric_wavelength_offsets.py
-```
-
-Generate a `sof` file for a raw exposure (as in `export.sh`): `soxspipe raw sof <SOF_NAME>.sof`.
+The scripts take no command-line arguments (except `telluric_lines_from_hitran.py`). Set inputs by editing the `# INPUTS` block of the script or cell 2 of the notebook. Run `soxspipe` and `shared/export.sh` from inside `shared/project_data/`. `soxs_nir_analysis/rerun.sh` re-reduces one NIR exposure and runs the script again.
 
 ## Pipeline-version comparison
 
-`extraction_archive/` holds the same standard-star spectra reduced in different ways, side by side, so offset results can be compared: `soxs_nir_extractions_0.17.1` (tagged release), `soxs_nir_extractions_v.dev` (dev branch), `soxs_nir_extractions_v.dev_horne_fix`, and the 2026 June–July VIS standards with attached arcs, unattached arcs, and unattached arcs with skyline fitting. Archival X-Shooter products are in `extraction_archive/xshooter_extractions/`. Switch between sets by changing `SOXS_ROOT` in the script's `# INPUTS` block.
+The same standard-star exposures are kept for three pipeline versions: `soxs_extractions_0.17.1` (tagged release), `soxs_extractions_v.dev` (dev branch), and `soxs_extractions_v.dev_horne_fix`. Each arm has its own copy in `soxs_nir_analysis/data/` and `soxs_uvvis_analysis/data/`. The UV-VIS data also include three `2026_june_july_standards_*` sets (attached arcs, unattached arcs, unattached arcs with sky line fitting). Switch between sets with `SOXS_ROOT` (NIR script) or `INDIR` (notebook).
 
-## Known stale paths
+## Known stale items
 
-The subfolder guide and the scripts predate the move of the extraction folders into `extraction_archive/`:
-
-- Both scripts set `XSHOOTER_ROOT = Path("xshooter_extractions")`, but the folder is now `extraction_archive/xshooter_extractions/`.
-- `soxs_telluric_wavelength_offsets.py` assigns `SOXS_ROOT` twice; the second assignment wins.
-- `cp_data.sh` copies into an old Desktop path (`/Users/Dave/Dropbox/Mac/Desktop/...`) and pulls from `/Volumes/SOXS/raw_archive/soxs_commissioning_data`, which must be mounted.
-- `rerun.sh` copies into `tmp/`, which no longer exists at the workspace root (it is now `extraction_archive/tmp/`).
+- `shared/cp_data.sh` has `DEST_DIR` set to an old Desktop path, and it reads from `/Volumes/SOXS/raw_archive/soxs_commissioning_data`, which must be mounted.
+- The scripts in `soxs_nir_analysis/legacy/` still use the old paths.
 
 ## Version control
 
-Git tracks code, the notebook, guides, and small tables only. It ignores FITS files, generated plots and reports (`*.png`, `*.pdf`, `*.html`), logs, the two VIS working directories, `*.reg`, and the data folders inside the analysis workspace (`2026-01/`, `extraction_archive/`, `project_data/`, `hitran_cache/`, `tmp/`, `results/plots/`, `*.tsv`). See `.gitignore`.
+Git tracks code, the notebook, documents, and small tables only. `.gitignore` excludes `*/data/`, `shared/project_data/`, `shared/hitran_cache/`, `soxs_uvvis_analysis/soxspipe_workdirs/`, `soxs_uvvis_analysis/reference/*.tsv`, `soxs_uvvis_analysis/results/plots/`, `soxs_nir_analysis/legacy/2026-01/`, and the global patterns `*.fits`, `*.png`, `*.pdf`, `*.html`, and `*.log`.
 
 ## Agent skills
 

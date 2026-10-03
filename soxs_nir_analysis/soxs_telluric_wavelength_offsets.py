@@ -10,11 +10,10 @@ import pandas as pd
 # =========================
 # INPUTS
 # =========================
-SOXS_ROOT = Path("soxs_extractions_v.dev")
-SOXS_ROOT = Path("extraction_archive/soxs_nir_extractions_v.dev_horne_fix")
-# SOXS_ROOT = Path("extraction_archive/tmp")
-TELL_FILE = Path("telluric_5_lines.dat")
-XSHOOTER_ROOT = Path("xshooter_extractions")
+SOXS_ROOT = Path("data/soxs_extractions_v.dev_horne_fix")
+# SOXS_ROOT = Path("data/tmp")
+TELL_FILE = Path("reference/telluric_5_lines.dat")
+XSHOOTER_ROOT = Path("data/xshooter_extractions")
 
 SOXS_MATCH_STRING = "SOXS_LTT3218"
 # SOXS_MATCH_STRING = "SOXS_Feige110"
