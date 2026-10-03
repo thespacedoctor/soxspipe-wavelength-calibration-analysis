@@ -1,110 +1,126 @@
-# Reorganise the workspace into UV-VIS and NIR analysis folders
+# Fix the UV-VIS wavelength-solution analysis in STDCheck-Cleaned.ipynb
 
 ## Context
 
-The repo is hard to navigate. All analysis lives in one folder, `eso_soxspipe_wavelength_cal_investigation_plots/` (W/). In that folder, UV-VIS and NIR code, reference tables, extracted spectra, plots, and an 18 GB soxspipe working directory sit side by side. Two VIS soxspipe working directories also sit at the repo root. Several paths are stale. Dave wants the UV-VIS and NIR analyses in separate folders, each with a README that explains its scripts. The older NIR script (`soxs_plot_spectrum_tell_vs_xshooter_shift.py`) is left out of the write-up.
+`soxs_uvvis_analysis/STDCheck-Cleaned.ipynb` measures the quality of the soxspipe VIS wavelength solution. Dave needs, for each of the u, g, r and i orders:
 
-Decisions confirmed with Dave:
-- Use the layout below, with `reference/`, `data/` and `results/` subfolders.
-- Split the three mixed `soxs_nir_extractions_*` folders by arm, using `_VIS_` / `_NIR_` in the filenames.
-- Keep `project_data/` whole in `shared/`, because its `soxspipe.db` and sessions cover both arms.
-- Move the older NIR script to `soxs_nir_analysis/legacy/` and leave it out of the README.
+- a median and a mean shift that can be used to correct that order;
+- the standard deviation of the scatter in the wavelength solution.
 
-## Target layout
+The scatter is reported two ways: line-to-line scatter inside an order after removing each exposure's own offset (internal accuracy), and exposure-to-exposure scatter of the per-order offset (stability).
 
-```
-./
-├── README.md                  index of the three folders (rewrite the empty stub)
-├── CLAUDE.md                  update for the new layout
-├── soxs_uvvis_analysis/
-│   ├── README.md
-│   ├── STDCheck-Cleaned.ipynb
-│   ├── reference/             flux_standards.fits, soxs_vis_r5000_telluric_spectrum.tsv,
-│   │                          SOXS_SPECTRAL_FORMAT_TAB_{VIS,NIR}.csv, slit5_feige110_props_all_time{,_orig}.csv
-│   ├── data/                  2026_june_july_standards_{attached_arcs,unattached_arcs,unattached_arcs_w_skyline_fitting}/
-│   │                          soxs_extractions_{0.17.1,v.dev,v.dev_horne_fix}/   (VIS FITS only)
-│   │                          tmp/   (the single VIS file 20260628T053000 from extraction_archive/tmp)
-│   ├── results/               CSVs and plots/ (unchanged)
-│   ├── reports/               01_/02_ *.html, *.pdf
-│   └── soxspipe_workdirs/     2026_june_VIS_example/, VIS_attached_arc_example/,
-│                              20260707T071228_soxs_absorption_lines.reg
-├── soxs_nir_analysis/
-│   ├── README.md
-│   ├── soxs_telluric_wavelength_offsets.py
-│   ├── rerun.sh
-│   ├── reference/             telluric_5_lines.dat
-│   ├── data/                  soxs_extractions_{0.17.1,v.dev,v.dev_horne_fix}/   (NIR FITS, plots_soxs_telluric_offsets/, list_spectra_parameters.sh)
-│   │                          xshooter_extractions/, tmp/ (the NIR files and hide/)
-│   └── legacy/                soxs_plot_spectrum_tell_vs_xshooter_shift.py, 2026-01/ (its plots)
-├── shared/
-│   ├── README.md
-│   ├── project_data/          soxspipe working dir with VIS and NIR (moved whole; its symlinks are relative)
-│   ├── telluric_lines_from_hitran.py, hitran_cache/
-│   └── cp_data.sh, export.sh
-└── docs/  input/  output/
-```
+The method compares each SOXS spectrum with the same star's library spectrum (`reference/flux_standards.fits`). Dave confirmed that the library spectra are corrected for radial velocity and are in the rest frame. A read-only review of the code and of the existing `results/std_check_wavelength_shifts.csv` found the following.
 
-`W/` is removed when it is empty. The extraction folders drop "nir" from their names, because each copy now holds a single arm.
+### Findings: analysis that is wrong
 
-## Steps
+1. **The velocity frames don't match (the main problem).**
+   - The SOXS spectra are topocentric. The headers have no barycentric keywords, and `ESO TEL TARG RADVEL = 0`. The library is in the rest frame.
+   - So every stellar-line "shift" includes three velocities: the star's radial velocity, the white-dwarf gravitational redshift, and the Earth's barycentric motion.
+   - The data show this:
+     - Stellar lines are offset by +0.5 to +1.3 Å (about +50 km/s).
+     - Telluric lines in the same exposures are offset by 0 ± 0.2 Å.
+     - Hα and the telluric line at 6278 Å are both in the r order, but Hα is offset by +0.75 to +1.1 Å while the telluric line is not. A wavelength-solution error would move both lines in the same order equally.
+   - The barycentric velocities are +6 km/s (EG21), −11 to −16 km/s (EG274), +28 km/s (Feige110) and +7 to +11 km/s (LTT7987). These alone don't explain the offset. The rest is the stars' own velocity plus gravitational redshift.
+   - Today's u and g "corrections" are therefore mostly stellar velocity, not calibration error.
+   - (The library is in air wavelengths: its Hα and Hβ minima are at 6562.8 Å and 4861.3 Å. So there is no air-to-vacuum mismatch.)
+2. **Hα is listed as a telluric line.** `[6563, 6563]` (EG274, LTT7987, EG21) and the 6562.806 Å entry in `TELLURIC_LINES` measure Hα, a stellar line, against the telluric model.
+3. **Windows are duplicated.**
+   - EG21 lists `[6558, 6568]` twice, so it is counted twice (6 rows from 3 spectra).
+   - EG274, LTT7987 and EG21 each measure Hα twice (once as a stellar window, once as a "telluric" window).
+4. **There is no outlier rejection.** A single bad fit dominates the standard deviation. For example, LTT7987 at 7253 Å has σ = 1.48 Å while the other telluric lines have σ ≈ 0.15 Å.
+5. **The statistics weight things unevenly and are inconsistent.**
+   - The pooled statistics weight stars by the number of spectra and windows they have.
+   - The whole-detector table (cell 18) is computed before the `ORDERS_TO_INSPECT` filter.
+   - The plots use `np.std` (ddof=0) and the tables use pandas `std` (ddof=1).
+6. **Stellar-line minima are noisy.** For a single star, the offset varies from exposure to exposure by up to about ±60 km/s (EG274 ranges from −18 to +112 km/s). The GAM minimum of a 10 Å window on broad white-dwarf Balmer cores is poorly constrained. This needs a robust statistic and an uncertainty per line.
 
-1. **Branch:** create `feature/reorganise-by-arm` from `develop`.
-2. **Move files:** use `git mv` for tracked files and plain `mv` for ignored data. Everything is on the same volume, so each move is a rename and no data is copied. To split each extraction folder, move `*_VIS_*.fits` to the UV-VIS `data/` folder and everything else to the NIR `data/` folder. Check the file counts before and after (about 38 VIS and 12 NIR per folder).
-3. **Fix paths in the code.** Make only the path edits listed here; change no logic.
-   - `STDCheck-Cleaned.ipynb` cell 2, cell 4 and cell 15 (the paths found in the survey):
-     - `./extraction_archive/2026_june_july_*` → `./data/2026_june_july_*` (the live `INDIR` and the two commented-out options).
-     - `./soxs_vis_r5000_telluric_spectrum.tsv`, `./flux_standards.fits`, `./slit5_feige110_props_all_time.csv` and `./SOXS_SPECTRAL_FORMAT_TAB_{ARM}.csv` → `./reference/…`.
-     - Edit the cell sources with a small Python/JSON script, so the outputs stay as they are.
-   - `soxs_telluric_wavelength_offsets.py` L13–17:
-     - Remove the dead first `SOXS_ROOT` assignment (L13).
-     - Set `SOXS_ROOT = Path("data/soxs_extractions_v.dev_horne_fix")`, and make the commented-out alternative `data/tmp`.
-     - Set `TELL_FILE = Path("reference/telluric_5_lines.dat")`.
-     - Set `XSHOOTER_ROOT = Path("data/xshooter_extractions")`. This also fixes the stale path.
-   - `rerun.sh`: `cd ../shared/project_data/`. Copy to `../../soxs_nir_analysis/data/tmp/`, `cd` back, then run the script.
-   - Legacy script: leave it unchanged.
-   - `shared/cp_data.sh`: leave the logic as it is. Its `DEST_DIR` is an old Desktop path; the README says so.
-   - The three `soxspipe.yaml` files (line 884, log `filename:`): change the stale Desktop path to each folder's new absolute path. These files are ignored by git.
-4. **Fold the old subfolder guide into the new docs:**
-   - Move the content of `W/.claude/CLAUDE.md` into the READMEs. The method steps go to NIR, and the standard-star line table goes to UV-VIS.
-   - Move `W/.claude/plans/*.md` to the root `.claude/plans/`.
-   - Move `W/.claude/settings.local.json` to the root `.claude/` if no root copy exists. If one exists, merge the `permissions` entries.
-   - Delete `W/.claude/`.
-5. **Write the READMEs** with the **doc-writer** agent, following `rules/common/documentation.md`:
-   - `soxs_uvvis_analysis/README.md`:
-     - What the notebook measures: the wavelength shift of standard-star absorption and telluric lines against `flux_standards.fits` and the telluric model.
-     - The config cell: `ARM`, `INDIR`, `STANDARD_STARS` windows.
-     - Inputs and outputs (`results/*.csv`, `results/plots/*`).
-     - What the three `2026_june_july_*` input sets are.
-     - The standard-star line table.
-     - The two soxspipe working directories and how they differ (`subtract_sky`).
-     - How to run: `conda activate soxspipe`, then Jupyter.
-   - `soxs_nir_analysis/README.md`:
-     - What `soxs_telluric_wavelength_offsets.py` does: the five method steps, the `# INPUTS` constants, the HITRAN vacuum-to-air conversion, and where outputs go.
-     - The data sets in `data/`, including the pipeline-version comparison.
-     - How `rerun.sh` works.
-     - A one-line note that `legacy/` holds a superseded script.
-   - `shared/README.md`:
-     - `project_data/`: a soxspipe working directory with both arms. Run `soxspipe` from inside it.
-     - `export.sh` (makes sof files; run it inside `project_data/`).
-     - `cp_data.sh`, including the external volume and the stale destination.
-     - `telluric_lines_from_hitran.py`: its CLI and cache.
-   - Root `README.md`: a short index of the three folders.
-6. **Update `.gitignore`:**
-   - Replace the `/eso_soxspipe_wavelength_cal_investigation_plots/…` rules with arm-folder rules: `*/data/`, `shared/project_data/`, `shared/hitran_cache/`, `soxs_uvvis_analysis/results/plots/`, `soxs_uvvis_analysis/soxspipe_workdirs/`, `soxs_uvvis_analysis/reference/*.tsv`, `soxs_nir_analysis/legacy/2026-01/`.
-   - Keep the global `*.fits`, `*.png`, `*.pdf`, `*.html` and `*.log` rules.
-7. **Update the root `CLAUDE.md`:** replace the Layout, Common commands, Pipeline-version comparison and Known stale paths sections to match the new tree, and point to the three READMEs. Remove the stale-path entries that this work fixes.
-8. **Review:** run **code-reviewer** + **python-reviewer** (one `.py` change and the notebook) in parallel. Then commit with `**REFACTOR**: split workspace into UV-VIS, NIR and shared folders`, and add a `CHANGES.md` line. There's no remote, so nothing is pushed and no PR is opened. Then ask Dave about merging into `develop`.
+### Findings: things to tidy up
+
+- `extract_properties` (cell 6) opens each FITS file twice and never closes it.
+- Unused items: the `s` and `f` imports from pygam, `slit5_feige110_props`, `allTelluricResultRows`, and the `if True:` in cell 23.
+- The `windowMin == windowMax` branch in `measure_window_minimum` is dead code.
+- The magic number 7 is repeated in two cells.
+- `print` noise in cell 7.
+- The typo `STARDARD_STAR_AKAS`.
+- Telluric lines are attached to individual stars, but they don't depend on the star. They should be measured in every exposure.
+
+## Approach
+
+Keep Dave's same-star library comparison, then remove the velocity part before computing the order statistics.
+
+1. **Classify the lines.** Split the configuration into `STELLAR_WINDOWS` (per star, `[min, max]`) and `TELLURIC_LINES` (one shared list: 6277.70, 6868.47, 7252.95, 8228.27 Å; Hα removed). Remove the duplicates. Measure every telluric line in every exposure, against the telluric model. Add `LineType` (`stellar` or `telluric`) and `Order` to each result row.
+2. **Barycentric correction.** For each exposure, compute `BaryCorrKms` with `SkyCoord(RA, DEC).radial_velocity_correction('barycentric', obstime=MJD-OBS, location=La Silla/NTT)`. Write it to the results CSV.
+3. **Per-exposure order offsets from the telluric lines (r and i only).** For each exposure and order, the offset is the median telluric shift in that order.
+4. **Star velocity.**
+   - For each stellar line in r or i, subtract that exposure's telluric order offset.
+   - Convert the result to a topocentric velocity, `v = c · Δλ / λ`, and then to the star's barycentric velocity, `v_star = v + BaryCorrKms`.
+   - Take the robust median for each star over all of its exposures. The star's velocity is constant, so this pools the data.
+   - Report each star's `v_star` with its MAD error, as a diagnostic. If a star has no usable r or i stellar line, flag it and leave it out of the u/g corrections.
+5. **Residuals.**
+   - For every stellar line: `ResidualAngstrom = ShiftAngstrom − λ · (v_star − BaryCorrKms) / c`.
+   - For every telluric line: `ResidualAngstrom = ShiftAngstrom`.
+   - The residual is the wavelength-solution error.
+6. **Per-order statistics** (u, g, r, i):
+   - The correction comes from the residuals after 3σ MAD-based clipping: `MedianShiftAngstrom`, `MeanShiftAngstrom`, `SEMeanAngstrom`, `NLines` and `NExposures`.
+   - `InternalScatterStd` and `InternalScatterMadStd`: the scatter of the residuals after subtracting each exposure's own median for that order.
+   - `ExposureScatterStd`: the standard deviation of the per-exposure order medians.
+   - Use the same ddof everywhere: ddof=1.
+   - r and i are anchored by the telluric lines alone. Their stellar residuals are centred on zero by construction, so they are reported but not used. u and g use the velocity-corrected stellar residuals. The table says which source each order uses.
+   - Also keep the raw table (the shifts before velocity correction) for comparison.
+7. **Diagnostic plot.** For each exposure, plot velocity offset (`c·Δλ/λ`) against wavelength, coloured by order, with the star velocity marked. A pure velocity offset is a flat line; an order offset is a step.
+8. **Tidy-ups:** everything in the tidy-up list above. The plotting cells stay the same apart from reading the new columns.
+
+### Code structure (testable)
+
+- Move the pure calculations into a new module, `soxs_uvvis_analysis/wavecal_stats.py`:
+  - `barycentric_correction_kms(header)`
+  - `telluric_order_offsets(resultsDf)`
+  - `fit_star_velocities(resultsDf, orderOffsets)`
+  - `velocity_corrected_residuals(resultsDf, starVelocities)`
+  - `clipped_order_stats(resultsDf)`
+- Use snake_case for functions and camelCase for variables, following the notebook's style.
+- The notebook imports from this module, so the analysis is unit-tested.
+- Add `soxs_uvvis_analysis/tests/test_wavecal_stats.py` (pytest), written test-first with the **tdd-coder** agent. Use synthetic data:
+  - A known velocity plus a known order offset must be recovered.
+  - The clipping must reject an injected outlier.
+  - The internal and exposure scatter must match the values injected.
+- Reuse the notebook's existing functions:
+  - `fit_abs_line` and `measure_window_minimum` (cells 8 and 9) for the line minima.
+  - `load_spectral_format` and `assign_spectral_order` (cell 15) for the orders.
+  - `get_spectra_for_star` (cell 9).
+
+## Files
+
+- `soxs_uvvis_analysis/STDCheck-Cleaned.ipynb`: the configuration split, the telluric measurement in every exposure, the module imports, the new statistics cells, the diagnostic plot, and the tidy-ups.
+- `soxs_uvvis_analysis/wavecal_stats.py`: new.
+- `soxs_uvvis_analysis/tests/test_wavecal_stats.py`: new.
+- `soxs_uvvis_analysis/results/`:
+  - `std_check_wavelength_shifts.csv` gets new columns.
+  - New files: `std_check_order_corrections.csv` (the main deliverable), `std_check_order_corrections_raw.csv` and `std_check_star_velocities.csv`.
+- `soxs_uvvis_analysis/README.md`: the method, the outputs, the velocity correction, and a short explanation of the barycentric correction. Written by the **doc-writer** agent.
+- `CHANGES.md`.
+
+## Process
+
+- Work on the branch `feature/uvvis-order-corrections`.
+- Before changing the code, run the **code-debugger** agent over the notebook to confirm the findings above, starting from the existing outputs.
+- Write the module with **tdd-coder**, then make the notebook edits.
+- Run **code-reviewer** and **python-reviewer** in parallel, then **test-runner**.
+- Commit, then ask Dave before merging into `develop`.
 
 ## Verification
 
-- `git status` / `git diff --stat -M`: tracked files show as renames, plus the expected path edits.
-- `find . -xtype l` returns nothing, so no symlinks are broken.
-- File counts in `data/` match the counts before the split. `du -sh` totals are unchanged at about 20 GB.
-- `grep -rn "extraction_archive\|eso_soxspipe_wavelength\|xshooter_extractions\"" --include=*.py --include=*.sh --include=*.ipynb --include=*.md .` matches only the deliberate mentions (none in live code).
-- In `soxs_nir_analysis/`, run `conda activate soxspipe && python soxs_telluric_wavelength_offsets.py`. It must load the spectra, the X-Shooter files and the HITRAN lines, and write PNGs to `data/soxs_extractions_v.dev_horne_fix/plots_soxs_telluric_offsets/`.
-- In `soxs_uvvis_analysis/`, run `jupyter nbconvert --to notebook --execute STDCheck-Cleaned.ipynb --output <scratchpad>/check.ipynb`. It must finish without errors. `git diff --stat results/` should show only the expected rewrites of the CSVs.
-- `bash -n soxs_nir_analysis/rerun.sh` passes. I won't run the full re-reduction.
+- `pytest soxs_uvvis_analysis/tests -q` passes, with at least 80% coverage of `wavecal_stats.py`.
+- Run the notebook headless (in `soxs_uvvis_analysis/`): `MPLBACKEND=Agg jupyter nbconvert --to notebook --execute STDCheck-Cleaned.ipynb --output-dir <scratchpad>`. It must finish without errors.
+- Sanity checks on the outputs:
+  - In r and i, the median telluric residual is consistent with the raw telluric shifts (about 0 ± 0.2 Å).
+  - The star velocities are positive and plausible for white dwarfs (tens of km/s). Feige110 (an sdO star) may differ.
+  - After the velocity correction, the stellar residuals for the same line no longer depend on the star.
+  - Each u and g correction is much smaller than the raw +0.5 to +1.3 Å, or the result is reported with its reason.
+  - Each row of `std_check_order_corrections.csv` gives the median, the mean, the internal and exposure scatter, N, and the anchor used.
+- Compare the old and new tables in the summary to Dave.
 
-## Note
+## Caveats to report
 
-The folder lives in Dropbox. Renaming about 20 GB triggers a Dropbox re-index but no re-upload. Let it finish before you open the files on another machine.
+- The velocities of the u and g orders depend on the r and i stellar lines of each star: Hα, plus He I 7065 Å for Feige110. With only one or two lines per star, the error on `v_star` carries straight into the u and g corrections. That error is reported.
+- The headers contain `ESO QC SKY SHIFT O1–O4`, soxspipe's own skyline shift for each order. O2 and O3 are exactly 0.0 in every file. This is worth checking with Dave: it may mean the skyline fit did not run for those orders. I'll report it and change nothing.
