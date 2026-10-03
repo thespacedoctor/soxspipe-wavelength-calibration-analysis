@@ -65,6 +65,7 @@ Cell 2 of the notebook holds all settings.
 | `TELLURIC_LINES` | Telluric line wavelengths (angstroms) that the telluric plots mark. |
 | `TELLURIC_LINES_NAMED` | Named lines (for example `Ca II K`, `H alpha`). The plot uses the name as the label when a window contains the line. |
 | `ORDERS_TO_INSPECT` | Spectral orders to keep, for example `['u', 'g', 'r', 'i']`. Use `None` to keep all. |
+| `PLOT_METRICS` | Set to `True` to also write the `*_metrics.png` plots. The default is `False`. |
 | `RESULTS_DIR`, `PLOTS_DIR` | Output folders. |
 | `RESULTS_CSV_PATH`, `STAR_WINDOW_STATS_CSV_PATH`, `ORDER_STATS_CSV_PATH`, `DETECTOR_STATS_CSV_PATH` | Output CSV paths. |
 | `SPECTRAL_FORMAT_CSV_PATH` | Per-order wavelength table for the current arm. |
@@ -109,10 +110,10 @@ The notebook writes all outputs to `results/`.
 | `std_check_stats_by_star_window.csv` | Shift statistics for each star, order, and window. |
 | `plots/{star}_{min}-{max}A_comparison.png` | The SOXS spectra on top of the star's model spectrum in one window, with a histogram of the measured minima. |
 | `plots/{star}_telluric_line_{wavelength}A_comparison.png` | The same plot for a telluric line, with the telluric model as the reference. |
-| `plots/{star}_{min}-{max}A_metrics.png` | Shift against airmass, MJD, seeing, temperatures, and rotator angle. |
+| `plots/{star}_{min}-{max}A_metrics.png` | Shift against airmass, MJD, seeing, temperatures, and rotator angle. Written only when `PLOT_METRICS = True`. |
 | `plots/{star}_{min}-{max}A_telluric.png` | Telluric sanity check. The SOXS spectra on top of the telluric model in a wide window. |
 
-The CSV files and plots are overwritten each time you run the notebook. Statistics and plots use only the orders in `ORDERS_TO_INSPECT`.
+The CSV files and plots are overwritten each time you run the notebook. With the default `PLOT_METRICS = False`, the existing `*_metrics.png` files are not updated. Statistics and plots use only the orders in `ORDERS_TO_INSPECT`.
 
 The folder `reports/` holds HTML and PDF exports of earlier notebook runs. Their titles are "SOXS VIS Wavelength Calibration Investigation - ONE" and "- TWO". The current notebook header says "THREE".
 
@@ -148,6 +149,4 @@ The folder `soxspipe_workdirs/` is not in version control.
 
 ## Known issues in the notebook
 
-- The comment in the notebook says that the window for a telluric line is widened by 5 angstroms. The code widens it by 7 angstroms (`measure_shifts_for_window` and cell 21). This README gives the value in the code.
-- The call to `plot_metrics` in cell 21 is inside an `if False:` block. The notebook does not make new `*_metrics.png` files until you change it. The existing metrics plots in `results/plots/` come from an earlier run.
 - Cell 2 has a `TODO` for the stars `GD71`, `LTT3218`, and `GD153`. These stars have no windows defined.
