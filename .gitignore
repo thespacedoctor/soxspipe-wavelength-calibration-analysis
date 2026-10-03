@@ -1,0 +1,9 @@
+# FITS DATA (TOO LARGE FOR VERSION CONTROL)
+*.fits
+*.fits.gz
+*.fit
+*.fz
+
+# OS AND TOOLING
+.DS_Store
+.codegraph/
