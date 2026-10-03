@@ -16,6 +16,8 @@
 .ipynb_checkpoints/
 __pycache__/
 *.pyc
+.coverage
+.pytest_cache/
 
 # EXTRACTED SPECTRA AND SOXSPIPE WORKING DIRECTORIES
 /soxs_uvvis_analysis/data/
