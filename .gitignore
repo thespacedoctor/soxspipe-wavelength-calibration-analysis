@@ -14,20 +14,17 @@
 .DS_Store
 .codegraph/
 .ipynb_checkpoints/
+__pycache__/
+*.pyc
 
-# SOXSPIPE VIS WORKING DIRECTORIES (DATA ONLY)
-/2026_june_VIS_example/
-/VIS_attached_arc_example/
+# EXTRACTED SPECTRA AND SOXSPIPE WORKING DIRECTORIES
+/soxs_uvvis_analysis/data/
+/soxs_nir_analysis/data/
+/shared/project_data/
+/shared/hitran_cache/
+/soxs_uvvis_analysis/soxspipe_workdirs/
 
-# REGION FILES
-/*.reg
-
-# ANALYSIS WORKSPACE: KEEP SCRIPTS, NOTEBOOK, GUIDE AND SMALL TABLES; IGNORE DATA
-/eso_soxspipe_wavelength_cal_investigation_plots/2026-01/
-/eso_soxspipe_wavelength_cal_investigation_plots/extraction_archive/
-/eso_soxspipe_wavelength_cal_investigation_plots/project_data/
-/eso_soxspipe_wavelength_cal_investigation_plots/hitran_cache/
-/eso_soxspipe_wavelength_cal_investigation_plots/tmp/
-/eso_soxspipe_wavelength_cal_investigation_plots/results/plots/
-/eso_soxspipe_wavelength_cal_investigation_plots/plots_*/
-/eso_soxspipe_wavelength_cal_investigation_plots/*.tsv
+# LARGE REFERENCE FILES AND GENERATED OUTPUTS
+/soxs_uvvis_analysis/reference/*.tsv
+/soxs_uvvis_analysis/results/plots/
+/soxs_nir_analysis/legacy/2026-01/
