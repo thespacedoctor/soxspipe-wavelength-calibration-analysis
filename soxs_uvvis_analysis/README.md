@@ -20,7 +20,7 @@ The statistics code is in `wavecal_stats.py`. The notebook imports it.
 
 ### Step 1. Measure the line shifts
 
-1. Load every extracted spectrum (`*.fits`) in `INDIR`. Keep only spectra of the arm in `ARM` that were taken with the 1.0 arcsecond slit. Match each spectrum to a star name from its `HIERARCH ESO OBS TARG NAME` header.
+1. Load every extracted spectrum (`*.fits`) in `INDIR` that belongs to the arm in `ARM`, for every slit width. The notebook keeps the spectra of `PRIMARY_SLIT` (1.0 arcseconds by default) for the main analysis. Spectra of other slits only feed the telluric shift plot (see [Outputs](#outputs)). Match each spectrum to a star name from its `HIERARCH ESO OBS TARG NAME` header.
 2. For each line window, find the wavelength of the flux minimum. The notebook fits a generalized additive model (`pygam.LinearGAM`, 25 splines) to the flux in the window. It takes the minimum of the fitted curve on a grid of 2000 points (`fit_abs_line`).
 3. Find the same minimum in a reference spectrum.
 4. Record the shift: measured minimum minus reference minimum, in angstroms.
@@ -30,9 +30,11 @@ The notebook uses two kinds of line.
 | Line type | Windows | Reference spectrum |
 | --- | --- | --- |
 | Stellar | The `[min, max]` windows in `STANDARD_STARS`. | The same star's rest-frame spectrum in `reference/flux_standards.fits`. The library wavelengths are air wavelengths. |
-| Telluric | Each wavelength in `TELLURIC_LINES` (6277.70, 6868.47, 7252.95, and 8228.27 Å), plus and minus `TELLURIC_HALF_WINDOW_ANGSTROM` (7 Å). | The telluric model in `reference/soxs_vis_r5000_telluric_spectrum.tsv`. The notebook measures these lines in every exposure. |
+| Telluric | Each wavelength in `TELLURIC_LINES` (6277.70, 6868.47, 7252.95, and 8228.27 Å), plus and minus `TELLURIC_HALF_WINDOW_ANGSTROM` (7 Å). | The telluric model in `reference/soxs_vis_r5000_telluric_spectrum.tsv`. The notebook measures these lines in every exposure, on every slit. |
 
 Each window gets the order whose wavelength range contains the window midpoint (`assign_spectral_order`).
+
+The notebook measures stellar lines on `PRIMARY_SLIT` only. It measures telluric lines on every slit and keeps them in `telluricAllSlitsDf`. The velocity fit, the order corrections, the tables, and the comparison plots use `PRIMARY_SLIT` only. Their results do not change when spectra of other slits are present.
 
 ### Step 2. Barycentric correction
 
@@ -118,6 +120,9 @@ Cell 2 of the notebook holds all settings.
 | `TELLURIC_WINDOWS` | Wide windows (angstroms) for the telluric sanity-check plots only. They do not affect the corrections. |
 | `STELLAR_LINES_NAMED` | Dictionary of named stellar lines (for example `H epsilon`, `He II 4686`) in angstroms (air). It is used only to label the plots. |
 | `REFERENCE_LINES_NAMED` | `STELLAR_LINES_NAMED` and `TELLURIC_LINES_NAMED` together. The comparison plot labels the line with the name of the named line in the window that is closest to the measured minimum. |
+| `PRIMARY_SLIT` | Slit width in arcseconds for the main analysis (velocity fit, order corrections, tables, and comparison plots). The default is `1.0`. The notebook loads spectra of other slits, but they only feed the telluric shift plot. The notebook raises a `ValueError` if `INDIR` has no spectra of this slit. |
+| `ORDER_COLORS` | Dictionary that maps each order to its plot color. The default is `u` purple, `g` green, `r` red, and `i` brown. |
+| `SLIT_MARKERS` | Dictionary that maps a slit width to its plot marker. The default is `{1.0: 'o', 5.0: 's'}`. Any other slit uses `'^'`. |
 | `ORDERS_TO_INSPECT` | Spectral orders to keep, for example `['u', 'g', 'r', 'i']`. Use `None` to keep all. |
 | `PLOT_METRICS` | Set to `True` to also write the `*_metrics.png` plots. The default is `False`. |
 | `RESULTS_DIR`, `PLOTS_DIR` | Output folders. |
@@ -150,7 +155,7 @@ Each folder holds extracted, merged spectra (`*_EXTRACTED_MERGED.fits`). The not
 | `soxs_extractions_0.17.1/`, `soxs_extractions_v.dev/`, `soxs_extractions_v.dev_horne_fix/` | The VIS spectra of three versions of the pipeline: the tagged release 0.17.1, the development branch, and the development branch with a change to the Horne extraction. The NIR spectra of the same sets are in `../soxs_nir_analysis/data/`. |
 | `tmp/` | One VIS spectrum (`20260628T053000...`). A scratch copy. |
 
-The notebook skips spectra of other arms and spectra that were not taken with the 1.0 arcsecond slit. It therefore uses fewer spectra than a folder holds.
+The notebook skips spectra of other arms. It loads the spectra of every slit, but the main analysis uses only the spectra of `PRIMARY_SLIT`. The default `INDIR` holds 19 spectra with the 1.0 arcsecond slit and 9 spectra with the 5.0 arcsecond slit. The main analysis therefore uses fewer spectra than a folder holds.
 
 ## Outputs
 
@@ -158,7 +163,7 @@ The notebook writes all outputs to `results/`.
 
 | File | Content |
 | --- | --- |
-| `std_check_wavelength_shifts.csv` | One row for each spectrum, star, and line. Columns: `Star`, `LineType`, `Order`, `WindowMinAngstrom`, `WindowMaxAngstrom`, `Filename`, `LibraryMinAngstrom`, `LineWavelengthAngstrom`, `MeasuredMinAngstrom`, `ShiftAngstrom`, `BaryCorrKms`, `Airmass`, `MJD-OBS`, `Seeing`, `T_com`, `T_ccd`, `Rotang`, `ExpectedVelocityShiftAngstrom`, `ResidualAngstrom`. |
+| `std_check_wavelength_shifts.csv` | One row for each spectrum, star, and line of `PRIMARY_SLIT`. `Slit` is the slit width in arcseconds. Columns: `Star`, `LineType`, `Order`, `WindowMinAngstrom`, `WindowMaxAngstrom`, `Filename`, `Slit`, `LibraryMinAngstrom`, `LineWavelengthAngstrom`, `MeasuredMinAngstrom`, `ShiftAngstrom`, `BaryCorrKms`, `Airmass`, `MJD-OBS`, `Seeing`, `T_com`, `T_ccd`, `Rotang`, `ExpectedVelocityShiftAngstrom`, `ResidualAngstrom`. |
 | `std_check_order_corrections.csv` | The main result. One row for each order, with the velocity-corrected residuals. Columns: `Order`, `Anchor`, `NLines`, `NExposures`, `MedianShiftAngstrom`, `MeanShiftAngstrom`, `StdShiftAngstrom`, `SEMeanAngstrom`, `InternalScatterStd`, `InternalScatterMadStd`, `ExposureScatterStd`, `NStars`, `StarScatterStd`, `NClipped`. |
 | `std_check_order_corrections_raw.csv` | The same statistics for the raw shifts (`ShiftAngstrom`), with no velocity correction and all line types. It has no `Anchor` column. It is for comparison with the earlier method. |
 | `std_check_star_velocities.csv` | The fitted velocity of each star. Columns: `Star`, `VStarKms`, `VStarErrKms`, `VStarMadStdKms`, `NLines`. |
@@ -166,6 +171,7 @@ The notebook writes all outputs to `results/`.
 | `plots/{star}_{min}-{max}A_comparison.png` | The SOXS spectra on top of the star's model spectrum in one window, with a histogram of the measured minima. Each SOXS spectrum is shifted into the star's rest frame by its expected velocity shift (fitted star velocity minus barycentric correction). A subtitle states the correction and the star velocity. The legend gives the median and standard deviation of the velocity-corrected shift (`ResidualAngstrom`). If the star has no fitted velocity, the plot shows the raw spectra and the raw shift, and the subtitle says so. |
 | `plots/{star}_telluric_line_{wavelength}A_comparison.png` | The same plot for a telluric line, with the telluric model as the reference. The spectra are not shifted, and a box gives the median and standard deviation of the raw shift. |
 | `plots/star_velocity_diagnostic.png` | The velocity of each stellar line against wavelength, one panel for each star. The dashed line is the fitted star velocity. A pure velocity offset gives a flat line. An error of the wavelength solution in one order gives a step. |
+| `plots/telluric_shift_diagnostic.png` | One panel with the shift of every telluric line (measured minus telluric model, in angstroms) against the line wavelength, for every star, exposure, and slit. Color shows the order. Marker shows the slit. The dashed line is the median of all shifts. The grey band is plus and minus one standard deviation (sample standard deviation, `ddof=1`). The legend gives the median, the standard deviation, and the number of lines. The standard deviation is the scatter of single lines, not an error on the median. For the default data, the median is about 0.000 Å, the standard deviation is 1.381 Å, and N is 112. The largest outliers are in the 5.0 arcsecond slit. |
 | `plots/{star}_{min}-{max}A_metrics.png` | Shift against airmass, MJD, seeing, temperatures, and rotator angle. Written only when `PLOT_METRICS = True`. |
 | `plots/{star}_{min}-{max}A_telluric.png` | Telluric sanity check. The SOXS spectra on top of the telluric model in a wide window. |
 
