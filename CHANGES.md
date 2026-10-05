@@ -4,6 +4,7 @@
 
 - **FEATURE**: telluric line shift plot for every slit in the UV-VIS notebook (`PRIMARY_SLIT`, `ORDER_COLORS`, `SLIT_MARKERS`, `Slit` column); the main analysis is unchanged
 - **FEATURE**: velocity-corrected per-order wavelength corrections and scatter for the UV-VIS notebook (barycentric correction, fitted star velocities, telluric anchors)
+- **ENHANCEMENT**: UV-VIS telluric and stellar shift diagnostic plots share one x-range and one key: order bands in the background, marker color for slit (`SLIT_COLORS`), marker shape for star (`STAR_MARKER_PALETTE`); the stellar plot now includes every slit and `ORDER_MARKERS` and `SLIT_MARKERS` are removed
 - **ENHANCEMENT**: one UV-VIS comparison plot per line and one telluric sanity-check plot per window, each with every star together in its own color (`STAR_PALETTE`, loaded stars only), replacing the per-star plots
 - **ENHANCEMENT**: one panel for the UV-VIS star velocity diagnostic plot, with every star together, velocity-corrected shifts in Å, and the median and σ in the legend (`ORDER_MARKERS`)
 - **ENHANCEMENT**: per-order medians in the legends of the UV-VIS telluric and velocity-corrected stellar shift diagnostic plots; legends moved outside the axes
