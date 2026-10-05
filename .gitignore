@@ -30,3 +30,5 @@ __pycache__/
 /soxs_uvvis_analysis/reference/*.tsv
 /soxs_uvvis_analysis/results/plots/
 /soxs_nir_analysis/legacy/2026-01/
+.claude
+/AGENTS.md
