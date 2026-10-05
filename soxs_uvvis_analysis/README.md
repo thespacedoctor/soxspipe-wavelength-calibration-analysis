@@ -2,22 +2,6 @@
 
 This folder holds the notebook (created by Geza, edited by Dave) and data that check the wavelength calibration of the SOXS UV-VIS arm. 
 
-## Contents
-
-- [What the notebook measures](#what-the-notebook-measures)
-- [Method](#method)
-- [Folder layout](#folder-layout)
-- [How to run the notebook](#how-to-run-the-notebook)
-- [Configuration](#configuration)
-- [Inputs](#inputs)
-- [Outputs](#outputs)
-- [Current results](#current-results)
-- [Caveats](#caveats)
-- [Tests](#tests)
-- [Standard stars and their spectral lines](#standard-stars-and-their-spectral-lines)
-- [soxspipe working directories](#soxspipe-working-directories)
-- [Known issues in the notebook](#known-issues-in-the-notebook)
-
 ## What the notebook measures
 
 `STDCheck-Cleaned.ipynb` finds the wavelength correction that each spectral order (u, g, r, and i) of the SOXS UV-VIS arm needs. It uses spectra of flux standard stars. For each order, it gives:
