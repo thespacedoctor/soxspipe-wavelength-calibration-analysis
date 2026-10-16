@@ -5,7 +5,13 @@
 <!-- ADD BRIEF DESCRIPTION OF METHOD USED HERE; measure telluric line accuracy, then correct the spectra for velocty, then measure the stellar line accuracy to bootstrap a measurement of the u and g order accuracies. -->
 <!-- We will measure a) accuracy of the wavelength solution of standards using nightly arcs, b) accuracy of the wavelength solution of standards using attached arcs, c) accuracy of the wavelength solution of standards using nightly arc with a final calibration to the sky-lines (r & i only) and d) accuracy of the wavelength solution of standards using attached arcs with a final calibration to the sky-lines (r & i only) -->
 
-## A. Nightly Arcs
+
+
+Here are the before-and-after results of the skyline wavelength-calibration enhancement. The ‘before’ results come from data reduced with soxpipe v0.17.4, and the ‘after’ results from v0.19.0.
+
+For each reduction, we reduce the same 11 standard stars. First, we reduce them with the daily arcs (normal operations mode), then with the attached arcs. 
+
+## BEFORE (v0.17.4) with Daily Arcs 
 
 <img width="1583" height="1084" alt="image" src="https://github.com/user-attachments/assets/cb79b811-4be2-43b1-905b-d7539cdf3687" />
 
@@ -76,5 +82,4 @@
 
 
 <img width="1545" height="446" alt="image" src="https://github.com/user-attachments/assets/dd196ed7-7723-40f1-92a9-a5d912583615" />
-
 
