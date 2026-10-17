@@ -2,9 +2,11 @@
 
 ## Method
 
-<!-- ADD BRIEF DESCRIPTION OF METHOD USED HERE; measure telluric line accuracy, then correct the spectra for velocty, then measure the stellar line accuracy to bootstrap a measurement of the u and g order accuracies. -->
-<!-- We will measure a) accuracy of the wavelength solution of standards using nightly arcs, b) accuracy of the wavelength solution of standards using attached arcs, c) accuracy of the wavelength solution of standards using nightly arc with a final calibration to the sky-lines (r & i only) and d) accuracy of the wavelength solution of standards using attached arcs with a final calibration to the sky-lines (r & i only) -->
-
+1. **Measure line shifts.** For each line, find the flux minimum and subtract the reference minimum. For **stellar** lines, use the star's rest-frame spectrum. **Telluric** lines use the telluric model. Each line is assigned to its order (u/g/r/i).
+2. **Barycentric correction.** locations of stellar lines are corrected for Earth's velocity and rotation. Telluric lines form in Earth's atmosphere, so they stay a fixed reference.
+3. **Fit star velocity.** In the r and i orders, take the median telluric offset per exposure, then compute `vStar` from each stellar line: shift minus telluric offset, converted to velocity, plus the barycentric correction. Take the 3-sigma MAD-clipped median.
+4. **Compute residuals.** Subtract the expected star-velocity shift from each line's shift. Telluric lines expect 0, so their residual equals their shift. The residual is the wavelength-solution error.
+5. **Per-order correction.** Compute clipped stats per order. The **u and g orders anchor on stellar lines** because they have no telluric lines. The **r and i orders anchor on telluric lines**, because their stellar lines fit the velocity and their residuals are about 0 by construction. The correction is minus the median shift.
 
 
 Here are the before-and-after results of the skyline wavelength-calibration enhancement. The ‘before’ results come from data reduced with soxpipe v0.17.4, and the ‘after’ results from v0.19.0.
