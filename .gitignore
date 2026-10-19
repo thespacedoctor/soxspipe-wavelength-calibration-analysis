@@ -6,7 +6,6 @@
 
 # GENERATED PLOTS, REPORTS AND LOGS
 *.pdf
-*.png
 *.html
 *.log
 
