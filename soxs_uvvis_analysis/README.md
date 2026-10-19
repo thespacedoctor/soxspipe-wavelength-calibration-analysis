@@ -1,6 +1,11 @@
 # SOXS UV-VIS Wavelength Calibration Analysis
 
-## Method
+This README documents the key results of adjusting and measuring the SOXS UVVIS wavelength calibration accuracy. 
+
+* See here for the analysis and subsequent method used to [Tightening the SOXS UVVIS wavelength solution.md](Tightening%20the%20SOXS%20UVVIS%20wavelength%20solution.md).
+* See here for the method used to [quantify the wavelength calibration accuracy](Measuring%20the%20UVVIS%20Wavelength%20Calibration%20Accuracy.md) (Geza's modified notebook). 
+
+## Method to Measure Wavelength Calibration Accuracy
 
 1. **Measure line shifts.** For each line, find the flux minimum and subtract the reference minimum. For **stellar** lines, use the star's rest-frame spectrum. **Telluric** lines use the telluric model. Each line is assigned to its order (u/g/r/i).
 2. **Barycentric correction.** locations of stellar lines are corrected for Earth's velocity and rotation. Telluric lines form in Earth's atmosphere, so they stay a fixed reference.
