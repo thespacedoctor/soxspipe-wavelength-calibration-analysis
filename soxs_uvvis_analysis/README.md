@@ -20,17 +20,16 @@ For each reduction, we reduce the same 11 standard stars. First, we reduce them 
 
 ## BEFORE (v0.17.4) with Daily Arcs 
 
-<img width="1583" height="1084" alt="image" src="https://github.com/user-attachments/assets/cb79b811-4be2-43b1-905b-d7539cdf3687" />
-
+<img width="1584" height="1084" alt="image" src="https://github.com/user-attachments/assets/b9698feb-6c71-4c1d-84d5-eed62a0956a9" />
 
 | Line type   | Order   |   N |   Median [Å] |   σ [Å] |
 |:------------|:--------|----:|-------------:|--------:|
-| telluric    | r       |  28 |       +0.201 |   0.734 |
-| telluric    | i       |  84 |       +0.209 |   0.859 |
-| stellar     | u       |  56 |       +0.166 |   0.558 |
-| stellar     | g       |  59 |       +0.057 |   0.742 |
-| stellar     | r       |  31 |       +0.104 |   0.917 |
-| stellar     | i       |   3 |       +0.170 |   0.962 |
+| telluric    | r       |  11 |       +0.421 |   0.401 |
+| telluric    | i       |  33 |       +0.202 |   0.816 |
+| stellar     | u       |  22 |       +0.050 |   0.430 |
+| stellar     | g       |  25 |       -0.146 |   0.596 |
+| stellar     | r       |  14 |       +0.294 |   0.408 |
+| stellar     | i       |   3 |       +0.186 |   1.117 |
 
 <img width="1548" height="446" alt="image" src="https://github.com/user-attachments/assets/88868e3a-8981-4b00-b879-e1ea4bff9ede" />
 
