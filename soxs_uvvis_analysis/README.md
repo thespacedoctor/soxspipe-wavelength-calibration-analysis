@@ -31,9 +31,13 @@ For each reduction, we reduce the same 11 standard stars. First, we reduce them 
 | stellar     | r       |  14 |       +0.294 |   0.408 |
 | stellar     | i       |   3 |       +0.186 |   1.117 |
 
-<img width="1548" height="446" alt="image" src="https://github.com/user-attachments/assets/88868e3a-8981-4b00-b879-e1ea4bff9ede" />
+**Telluric lines in i-band**
 
-<img width="1545" height="444" alt="image" src="https://github.com/user-attachments/assets/075610f8-bc4d-48b0-a68c-7b3a11b6cf70" />
+<img width="1548" height="441" alt="image" src="https://github.com/user-attachments/assets/e441858a-4547-4ebd-9aac-fb7ec627fc94" />
+
+**H-beta stellar line in g-band**
+
+<img width="1542" height="745" alt="image" src="https://github.com/user-attachments/assets/fab0897d-fd65-460b-968a-7d7559aad760" />
 
 
 ## B. Attached Arcs
