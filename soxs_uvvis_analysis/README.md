@@ -40,22 +40,24 @@ For each reduction, we reduce the same 11 standard stars. First, we reduce them 
 <img width="1542" height="745" alt="image" src="https://github.com/user-attachments/assets/fab0897d-fd65-460b-968a-7d7559aad760" />
 
 
-## B. Attached Arcs
+## BEFORE (v0.17.4) with Attached Arcs 
 
-<img width="1587" height="1084" alt="image" src="https://github.com/user-attachments/assets/a43466b2-7fb2-4acd-b04d-96119ec451d5" />
+<img width="1585" height="1081" alt="image" src="https://github.com/user-attachments/assets/8e8f1d6c-539a-4e7f-9a08-2ae858d00536" />
+
 
 | Line type   | Order   |   N |   Median [Å] |   σ [Å] |
 |:------------|:--------|----:|-------------:|--------:|
-| telluric    | r       |  28 |       +0.097 |   0.846 |
-| telluric    | i       |  84 |       -0.148 |   1.382 |
-| stellar     | u       |  56 |       +0.373 |   0.593 |
-| stellar     | g       |  59 |       +0.053 |   1.022 |
-| stellar     | r       |  31 |       +0.007 |   0.757 |
-| stellar     | i       |   3 |       +0.198 |   0.188 |
+| telluric    | r       |  10 |       -0.045 |   0.453 |
+| telluric    | i       |  30 |       +0.042 |   1.127 |
+| stellar     | u       |  20 |       +0.166 |   0.317 |
+| stellar     | g       |  23 |       -0.074 |   0.362 |
+| stellar     | r       |  13 |       -0.271 |   0.479 |
+| stellar     | i       |   3 |       +0.129 |   0.267 |
 
-<img width="1544" height="445" alt="image" src="https://github.com/user-attachments/assets/a115e5be-abba-4040-a5a1-4a51bd7a2b3f" />
+<img width="1534" height="749" alt="image" src="https://github.com/user-attachments/assets/dfab0436-c115-47a2-8158-4d2e7b6563ae" />
 
-<img width="1544" height="446" alt="image" src="https://github.com/user-attachments/assets/6a0d01a0-2201-431d-b36b-760c5602c249" />
+<img width="1543" height="447" alt="image" src="https://github.com/user-attachments/assets/2da77ddd-4ecb-4816-8b88-eaed6987f70f" />
+
 
 
 ## C. Nightly Arcs with Skyline Calibration
