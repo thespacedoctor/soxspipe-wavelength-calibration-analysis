@@ -22,14 +22,15 @@ For each reduction, we reduce the same 11 standard stars. First, we reduce them 
 
 <img width="1584" height="1084" alt="image" src="https://github.com/user-attachments/assets/b9698feb-6c71-4c1d-84d5-eed62a0956a9" />
 
-| Line type   | Order   |   N |   Median [Å] |   σ [Å] |
-|:------------|:--------|----:|-------------:|--------:|
-| telluric    | r       |  11 |       +0.421 |   0.401 |
-| telluric    | i       |  33 |       +0.202 |   0.816 |
-| stellar     | u       |  22 |       +0.050 |   0.430 |
-| stellar     | g       |  25 |       -0.146 |   0.596 |
-| stellar     | r       |  14 |       +0.294 |   0.408 |
-| stellar     | i       |   3 |       +0.186 |   1.117 |
+RMS = √(median residual² + σ²), pooling telluric shifts and velocity-corrected stellar residuals.
+
+| Band      |   N |   Median [Å] |   σ [Å] |   RMS [Å] |
+|:----------|----:|-------------:|--------:|----------:|
+| u         |  20 |       +0.007 |   0.363 |     0.363 |
+| g         |  25 |       -0.209 |   0.596 |     0.632 |
+| r         |  23 |       +0.277 |   0.389 |     0.478 |
+| i         |  33 |       +0.186 |   0.600 |     0.628 |
+| All bands | 101 |       +0.072 |   0.592 |     0.596 |
 
 **Telluric lines in i-band**
 
@@ -44,15 +45,15 @@ For each reduction, we reduce the same 11 standard stars. First, we reduce them 
 
 <img width="1585" height="1081" alt="image" src="https://github.com/user-attachments/assets/8e8f1d6c-539a-4e7f-9a08-2ae858d00536" />
 
+RMS = √(median residual² + σ²), pooling telluric shifts and velocity-corrected stellar residuals.
 
-| Line type   | Order   |   N |   Median [Å] |   σ [Å] |
-|:------------|:--------|----:|-------------:|--------:|
-| telluric    | r       |  10 |       -0.045 |   0.453 |
-| telluric    | i       |  30 |       +0.042 |   1.127 |
-| stellar     | u       |  20 |       +0.166 |   0.317 |
-| stellar     | g       |  23 |       -0.074 |   0.362 |
-| stellar     | r       |  13 |       -0.271 |   0.479 |
-| stellar     | i       |   3 |       +0.129 |   0.267 |
+| Band      |   N |   Median [Å] |   σ [Å] |   RMS [Å] |
+|:----------|----:|-------------:|--------:|----------:|
+| u         |  21 |       +0.201 |   0.369 |     0.420 |
+| g         |  25 |       +0.012 |   0.678 |     0.678 |
+| r         |  23 |       +0.021 |   0.203 |     0.204 |
+| i         |  33 |       -0.077 |   0.223 |     0.236 |
+| All bands | 102 |       +0.007 |   0.418 |     0.418 |
 
 **Telluric lines in i-band**
 
@@ -68,15 +69,15 @@ For each reduction, we reduce the same 11 standard stars. First, we reduce them 
 
 <img width="1585" height="1084" alt="image" src="https://github.com/user-attachments/assets/cd03e0af-5c1c-4465-abc9-8097d6b5ee80" />
 
+RMS = √(median residual² + σ²), pooling telluric shifts and velocity-corrected stellar residuals.
 
-| Line type   | Order   |   N |   Median [Å] |   σ [Å] |
-|:------------|:--------|----:|-------------:|--------:|
-| telluric    | r       |  11 |       +0.035 |   0.221 |
-| telluric    | i       |  30 |       +0.026 |   0.220 |
-| stellar     | u       |  20 |       +0.293 |   0.274 |
-| stellar     | g       |  24 |       +0.223 |   0.278 |
-| stellar     | r       |  13 |       +0.026 |   0.273 |
-| stellar     | i       |   3 |       +0.121 |   0.253 |
+| Band      |   N |   Median [Å] |   σ [Å] |   RMS [Å] |
+|:----------|----:|-------------:|--------:|----------:|
+| u         |  20 |       +0.293 |   0.274 |     0.402 |
+| g         |  24 |       +0.223 |   0.278 |     0.357 |
+| r         |  24 |       +0.029 |   0.249 |     0.250 |
+| i         |  33 |       +0.030 |   0.223 |     0.224 |
+| All bands | 101 |       +0.079 |   0.282 |     0.293 |
 
 **Telluric lines in i-band**
 
@@ -91,14 +92,15 @@ For each reduction, we reduce the same 11 standard stars. First, we reduce them 
 
 <img width="1582" height="1080" alt="image" src="https://github.com/user-attachments/assets/e7bbc269-4b75-47cd-9615-dd58ce7f09e2" />
 
-| Line type   | Order   |   N |   Median [Å] |   σ [Å] |
-|:------------|:--------|----:|-------------:|--------:|
-| telluric    | r       |  11 |       +0.014 |   0.244 |
-| telluric    | i       |  31 |       +0.013 |   0.953 |
-| stellar     | u       |  19 |       +0.231 |   0.350 |
-| stellar     | g       |  23 |       +0.144 |   0.395 |
-| stellar     | r       |  12 |       -0.015 |   0.329 |
-| stellar     | i       |   3 |       +0.119 |   0.344 |
+RMS = √(median residual² + σ²), pooling telluric shifts and velocity-corrected stellar residuals.
+
+| Band      |   N |   Median [Å] |   σ [Å] |   RMS [Å] |
+|:----------|----:|-------------:|--------:|----------:|
+| u         |  19 |       +0.231 |   0.350 |     0.419 |
+| g         |  23 |       +0.144 |   0.395 |     0.421 |
+| r         |  23 |       +0.014 |   0.291 |     0.291 |
+| i         |  34 |       +0.014 |   0.913 |     0.913 |
+| All bands |  99 |       +0.069 |   0.606 |     0.610 |
 
 **Telluric lines in i-band**
 
@@ -109,4 +111,30 @@ For each reduction, we reduce the same 11 standard stars. First, we reduce them 
 <img width="1542" height="744" alt="image" src="https://github.com/user-attachments/assets/2e3e194d-0350-44e3-a8cb-56e6359cba22" />
 
 It should be noted here that the wavelength solution, when using the attached arcs, is of sufficient accuracy that attempting to further improve the solution with skylines actually introduces noise and degrades the original accuracy. Therefore, the pipeline now includes a gate so that whenever it recognises an attached arc, it will not attempt to further tune the solution with the skylines. 
+
+## AFTER (v0.19.0) with attached arcs & gate to prevent skyline line adjustments on science frames with attached arcs
+
+<img width="1588" height="1080" alt="image" src="https://github.com/user-attachments/assets/5f7d5e14-7334-4e54-b843-ab691be25d73" />
+
+
+RMS = √(median residual² + σ²), pooling telluric shifts and velocity-corrected stellar residuals.
+
+| Band      |   N |   Median [Å] |   σ [Å] |   RMS [Å] |
+|:----------|----:|-------------:|--------:|----------:|
+| u         |  20 |       +0.273 |   0.246 |     0.367 |
+| g         |  25 |       +0.154 |   0.191 |     0.245 |
+| r         |  24 |       +0.008 |   0.209 |     0.209 |
+| i         |  34 |       -0.055 |   0.895 |     0.897 |
+| All bands | 103 |       +0.049 |   0.543 |     0.545 |
+
+**Telluric lines in i-band**
+
+<img width="1546" height="447" alt="image" src="https://github.com/user-attachments/assets/9b6fe572-b98c-4af9-8f08-b0b59f6ea013" />
+
+
+**H-beta stellar line in g-band**
+
+
+<img width="1539" height="744" alt="image" src="https://github.com/user-attachments/assets/54eec6f5-dc02-4ed8-a0e4-13eff776ad39" />
+
 
