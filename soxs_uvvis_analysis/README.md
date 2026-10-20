@@ -54,44 +54,58 @@ For each reduction, we reduce the same 11 standard stars. First, we reduce them 
 | stellar     | r       |  13 |       -0.271 |   0.479 |
 | stellar     | i       |   3 |       +0.129 |   0.267 |
 
+**Telluric lines in i-band**
+
 <img width="1534" height="749" alt="image" src="https://github.com/user-attachments/assets/dfab0436-c115-47a2-8158-4d2e7b6563ae" />
+
+**H-beta stellar line in g-band**
 
 <img width="1543" height="447" alt="image" src="https://github.com/user-attachments/assets/2da77ddd-4ecb-4816-8b88-eaed6987f70f" />
 
 
 
-## C. Nightly Arcs with Skyline Calibration
+## AFTER (v0.19.0) with Daily Arcs 
 
-<img width="1585" height="1085" alt="image" src="https://github.com/user-attachments/assets/5fa57203-2f9e-4972-9464-cfb51bc3be38" />
+<img width="1585" height="1084" alt="image" src="https://github.com/user-attachments/assets/cd03e0af-5c1c-4465-abc9-8097d6b5ee80" />
+
 
 | Line type   | Order   |   N |   Median [Å] |   σ [Å] |
 |:------------|:--------|----:|-------------:|--------:|
-| telluric    | r       |  28 |       +0.069 |   0.956 |
-| telluric    | i       |  84 |       -0.050 |   1.088 |
-| stellar     | u       |  56 |       +0.193 |   0.570 |
-| stellar     | g       |  59 |       +0.094 |   0.749 |
-| stellar     | r       |  31 |       +0.001 |   1.148 |
-| stellar     | i       |   3 |       +0.069 |   0.315 |
+| telluric    | r       |  11 |       +0.035 |   0.221 |
+| telluric    | i       |  30 |       +0.026 |   0.220 |
+| stellar     | u       |  20 |       +0.293 |   0.274 |
+| stellar     | g       |  24 |       +0.223 |   0.278 |
+| stellar     | r       |  13 |       +0.026 |   0.273 |
+| stellar     | i       |   3 |       +0.121 |   0.253 |
 
-<img width="1547" height="443" alt="image" src="https://github.com/user-attachments/assets/bfd5d163-00c5-429b-9f7a-3b067c5ff78c" />
+**Telluric lines in i-band**
 
-<img width="1543" height="443" alt="image" src="https://github.com/user-attachments/assets/9ba109d8-0b3b-49cb-bc56-c65b39eae8f7" />
+<img width="1546" height="446" alt="image" src="https://github.com/user-attachments/assets/2986a5d4-fc8c-402a-be21-3a373085ac71" />
 
-## D. Attached Arcs with Skyline Calibration
+**H-beta stellar line in g-band**
 
-<img width="1584" height="1084" alt="image" src="https://github.com/user-attachments/assets/eddb279e-2fce-41a4-9b14-36394300a70f" />
+<img width="1541" height="742" alt="image" src="https://github.com/user-attachments/assets/11b422be-dbff-4d55-8ba0-9f3c6aa85802" />
+
+
+## AFTER (v0.19.0) with Attached Arcs 
+
+<img width="1582" height="1080" alt="image" src="https://github.com/user-attachments/assets/e7bbc269-4b75-47cd-9615-dd58ce7f09e2" />
 
 | Line type   | Order   |   N |   Median [Å] |   σ [Å] |
 |:------------|:--------|----:|-------------:|--------:|
-| telluric    | r       |  28 |       +0.066 |   0.794 |
-| telluric    | i       |  84 |       -0.079 |   1.765 |
-| stellar     | u       |  56 |       +0.319 |   0.449 |
-| stellar     | g       |  59 |       -0.036 |   0.768 |
-| stellar     | r       |  31 |       -0.131 |   1.180 |
-| stellar     | i       |   3 |       +0.467 |   0.398 |
+| telluric    | r       |  11 |       +0.014 |   0.244 |
+| telluric    | i       |  31 |       +0.013 |   0.953 |
+| stellar     | u       |  19 |       +0.231 |   0.350 |
+| stellar     | g       |  23 |       +0.144 |   0.395 |
+| stellar     | r       |  12 |       -0.015 |   0.329 |
+| stellar     | i       |   3 |       +0.119 |   0.344 |
 
-<img width="1545" height="443" alt="image" src="https://github.com/user-attachments/assets/6d64da41-5134-4943-9b2e-94f913e9df42" />
+**Telluric lines in i-band**
 
+<img width="1546" height="442" alt="image" src="https://github.com/user-attachments/assets/9767ef9b-e2c5-4e17-aa43-31bfa319e2ea" />
 
-<img width="1545" height="446" alt="image" src="https://github.com/user-attachments/assets/dd196ed7-7723-40f1-92a9-a5d912583615" />
+**H-beta stellar line in g-band**
+
+<img width="1542" height="744" alt="image" src="https://github.com/user-attachments/assets/2e3e194d-0350-44e3-a8cb-56e6359cba22" />
+
 
