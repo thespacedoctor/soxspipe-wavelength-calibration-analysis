@@ -90,17 +90,17 @@ RMS = √(median residual² + σ²), pooling telluric shifts and velocity-correc
 
 ## AFTER (v0.19.0) with Attached Arcs 
 
-<img width="1582" height="1080" alt="image" src="https://github.com/user-attachments/assets/e7bbc269-4b75-47cd-9615-dd58ce7f09e2" />
+<img width="1583" height="1085" alt="image" src="https://github.com/user-attachments/assets/17ec5f57-de4b-4c95-88a4-1f1da4a53709" />
 
 RMS = √(median residual² + σ²), pooling telluric shifts and velocity-corrected stellar residuals.
 
 | Band      |   N |   Median [Å] |   σ [Å] |   RMS [Å] |
 |:----------|----:|-------------:|--------:|----------:|
-| u         |  19 |       +0.231 |   0.350 |     0.419 |
-| g         |  23 |       +0.144 |   0.395 |     0.421 |
-| r         |  23 |       +0.014 |   0.291 |     0.291 |
-| i         |  34 |       +0.014 |   0.913 |     0.913 |
-| All bands |  99 |       +0.069 |   0.606 |     0.610 |
+| u         |  17 |       +0.230 |   0.371 |     0.437 |
+| g         |  23 |       +0.142 |   0.399 |     0.423 |
+| r         |  22 |       +0.025 |   0.294 |     0.295 |
+| i         |  32 |       +0.010 |   0.252 |     0.252 |
+| All bands |  94 |       +0.053 |   0.334 |     0.339 |
 
 **Telluric lines in i-band**
 
