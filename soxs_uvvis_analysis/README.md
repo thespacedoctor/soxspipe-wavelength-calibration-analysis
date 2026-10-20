@@ -114,18 +114,17 @@ It should be noted here that the wavelength solution, when using the attached ar
 
 ## AFTER (v0.19.0) with attached arcs & gate to prevent skyline line adjustments on science frames with attached arcs
 
-<img width="1588" height="1080" alt="image" src="https://github.com/user-attachments/assets/5f7d5e14-7334-4e54-b843-ab691be25d73" />
-
+<img width="1584" height="1082" alt="image" src="https://github.com/user-attachments/assets/6f572308-fdad-4bb2-8982-3f6b387c16e5" />
 
 RMS = √(median residual² + σ²), pooling telluric shifts and velocity-corrected stellar residuals.
 
 | Band      |   N |   Median [Å] |   σ [Å] |   RMS [Å] |
 |:----------|----:|-------------:|--------:|----------:|
-| u         |  20 |       +0.273 |   0.246 |     0.367 |
+| u         |  17 |       +0.279 |   0.252 |     0.376 |
 | g         |  25 |       +0.154 |   0.191 |     0.245 |
 | r         |  24 |       +0.008 |   0.209 |     0.209 |
-| i         |  34 |       -0.055 |   0.895 |     0.897 |
-| All bands | 103 |       +0.049 |   0.543 |     0.545 |
+| i         |  31 |       -0.061 |   0.191 |     0.201 |
+| All bands |  97 |       +0.047 |   0.236 |     0.241 |
 
 **Telluric lines in i-band**
 
