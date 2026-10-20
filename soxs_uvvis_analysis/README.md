@@ -20,17 +20,17 @@ For each reduction, we reduce the same 11 standard stars. First, we reduce them 
 
 ## BEFORE (v0.17.4) with Daily Arcs 
 
-<img width="1584" height="1084" alt="image" src="https://github.com/user-attachments/assets/b9698feb-6c71-4c1d-84d5-eed62a0956a9" />
+<img width="1583" height="1080" alt="image" src="https://github.com/user-attachments/assets/1e86e5fc-3c2c-422b-b982-13f2b5c897d0" />
 
 RMS = √(median residual² + σ²), pooling telluric shifts and velocity-corrected stellar residuals.
 
 | Band      |   N |   Median [Å] |   σ [Å] |   RMS [Å] |
 |:----------|----:|-------------:|--------:|----------:|
-| u         |  20 |       +0.007 |   0.363 |     0.363 |
-| g         |  25 |       -0.209 |   0.596 |     0.632 |
-| r         |  23 |       +0.277 |   0.389 |     0.478 |
-| i         |  33 |       +0.186 |   0.600 |     0.628 |
-| All bands | 101 |       +0.072 |   0.592 |     0.596 |
+| u         |  14 |       -0.175 |   0.380 |     0.419 |
+| g         |  25 |       -0.418 |   0.618 |     0.746 |
+| r         |  21 |       +0.184 |   0.398 |     0.438 |
+| i         |  31 |       +0.202 |   0.612 |     0.644 |
+| All bands |  91 |       +0.046 |   0.634 |     0.636 |
 
 **Telluric lines in i-band**
 
@@ -43,17 +43,18 @@ RMS = √(median residual² + σ²), pooling telluric shifts and velocity-correc
 
 ## BEFORE (v0.17.4) with Attached Arcs 
 
-<img width="1585" height="1081" alt="image" src="https://github.com/user-attachments/assets/8e8f1d6c-539a-4e7f-9a08-2ae858d00536" />
+<img width="1583" height="1080" alt="image" src="https://github.com/user-attachments/assets/fce45159-ec8c-4fe8-8e5e-1d1cb5c51f88" />
+
 
 RMS = √(median residual² + σ²), pooling telluric shifts and velocity-corrected stellar residuals.
 
 | Band      |   N |   Median [Å] |   σ [Å] |   RMS [Å] |
 |:----------|----:|-------------:|--------:|----------:|
-| u         |  21 |       +0.201 |   0.369 |     0.420 |
-| g         |  25 |       +0.012 |   0.678 |     0.678 |
-| r         |  23 |       +0.021 |   0.203 |     0.204 |
-| i         |  33 |       -0.077 |   0.223 |     0.236 |
-| All bands | 102 |       +0.007 |   0.418 |     0.418 |
+| u         |  16 |       +0.206 |   0.388 |     0.439 |
+| g         |  25 |       +0.017 |   0.678 |     0.678 |
+| r         |  22 |       +0.021 |   0.206 |     0.207 |
+| i         |  29 |       -0.084 |   0.226 |     0.241 |
+| All bands |  92 |       +0.016 |   0.433 |     0.434 |
 
 **Telluric lines in i-band**
 
@@ -67,17 +68,17 @@ RMS = √(median residual² + σ²), pooling telluric shifts and velocity-correc
 
 ## AFTER (v0.19.0) with Daily Arcs 
 
-<img width="1585" height="1084" alt="image" src="https://github.com/user-attachments/assets/cd03e0af-5c1c-4465-abc9-8097d6b5ee80" />
+<img width="1585" height="1081" alt="image" src="https://github.com/user-attachments/assets/2b4a78db-4b87-4f5b-a674-b31db810d3cd" />
 
 RMS = √(median residual² + σ²), pooling telluric shifts and velocity-corrected stellar residuals.
 
 | Band      |   N |   Median [Å] |   σ [Å] |   RMS [Å] |
 |:----------|----:|-------------:|--------:|----------:|
-| u         |  20 |       +0.293 |   0.274 |     0.402 |
+| u         |  19 |       +0.312 |   0.282 |     0.420 |
 | g         |  24 |       +0.223 |   0.278 |     0.357 |
 | r         |  24 |       +0.029 |   0.249 |     0.250 |
-| i         |  33 |       +0.030 |   0.223 |     0.224 |
-| All bands | 101 |       +0.079 |   0.282 |     0.293 |
+| i         |  32 |       +0.026 |   0.216 |     0.218 |
+| All bands |  99 |       +0.070 |   0.283 |     0.291 |
 
 **Telluric lines in i-band**
 
