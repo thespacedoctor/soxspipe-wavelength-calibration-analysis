@@ -108,4 +108,5 @@ For each reduction, we reduce the same 11 standard stars. First, we reduce them 
 
 <img width="1542" height="744" alt="image" src="https://github.com/user-attachments/assets/2e3e194d-0350-44e3-a8cb-56e6359cba22" />
 
+It should be noted here that the wavelength solution, when using the attached arcs, is of sufficient accuracy that attempting to further improve the solution with skylines actually introduces noise and degrades the original accuracy. Therefore, the pipeline now includes a gate so that whenever it recognises an attached arc, it will not attempt to further tune the solution with the skylines. 
 
