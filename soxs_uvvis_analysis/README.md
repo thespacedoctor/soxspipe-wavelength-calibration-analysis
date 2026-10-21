@@ -1,5 +1,14 @@
 # SOXS UV-VIS Wavelength Calibration Analysis
 
+---
+
+**TL;DR:**
+
+* With daily arcs, we achieve a UV-VIS wavelength solution accuracy of ±0.5Å (for the bluest regions, with greater accuracy achieved as wavelength increases)
+* With attached arcs, we achieve a UV-VIS wavelength solution accuracy of ±0.4Å (for the bluest regions, with greater accuracy achieved as wavelength increases)
+
+---
+
 This README documents the key results of adjusting and measuring the SOXS UVVIS wavelength calibration accuracy. 
 
 * See here for the analysis and subsequent method used to [Tightening the SOXS UVVIS wavelength solution.md](Tightening%20the%20SOXS%20UVVIS%20wavelength%20solution.md).
@@ -74,7 +83,7 @@ RMS = √(median residual² + σ²), pooling telluric shifts and velocity-correc
 
 | Band      |   N |   Median [Å] |   σ [Å] |   RMS [Å] |
 |:----------|----:|-------------:|--------:|----------:|
-| u         |  19 |       +0.312 |   0.282 |     0.420 |
+| u         |  19 |       +0.312 |   0.282 |     **0.420** |
 | g         |  24 |       +0.223 |   0.278 |     0.357 |
 | r         |  24 |       +0.029 |   0.249 |     0.250 |
 | i         |  32 |       +0.026 |   0.216 |     0.218 |
@@ -121,7 +130,7 @@ RMS = √(median residual² + σ²), pooling telluric shifts and velocity-correc
 
 | Band      |   N |   Median [Å] |   σ [Å] |   RMS [Å] |
 |:----------|----:|-------------:|--------:|----------:|
-| u         |  17 |       +0.279 |   0.252 |     0.376 |
+| u         |  17 |       +0.279 |   0.252 |     **0.376** |
 | g         |  25 |       +0.154 |   0.191 |     0.245 |
 | r         |  24 |       +0.008 |   0.209 |     0.209 |
 | i         |  31 |       -0.061 |   0.191 |     0.201 |
