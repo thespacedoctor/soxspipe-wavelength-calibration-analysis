@@ -10,6 +10,7 @@ from astropy.io import fits
 from astropy.stats import sigma_clip, sigma_clipped_stats
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.ticker import ScalarFormatter
+from scipy.optimize import OptimizeWarning, curve_fit
 
 # =========================
 # INPUTS
@@ -42,8 +43,30 @@ MAX_OFFSET_TO_ACCEPT_NM = SEARCH_HALF_WINDOW_NM
 MIN_POINTS_IN_WINDOW = 5
 PARABOLA_REFINE = True
 MIN_DEPTH = 0.05
-MAX_CORE_FLUX = 0.1
-CONTINUUM_PERCENTILE = 90
+MAX_CORE_RATIO = 0.1
+
+# LOCAL CONTINUUM: A STRAIGHT LINE FITTED TO SIDEBANDS OUTSIDE THE LINE CORE, WHICH SCALES WITH THE LINE WIDTH.
+DEFAULT_LINE_SIGMA_NM = 0.1
+CORE_SIGMA_FACTOR = 2.5
+NEIGHBOUR_MASK_SIGMA_FACTOR = 1.0
+SIDEBAND_WIDTH_NM = 0.25
+MIN_SIDEBAND_POINTS = 3
+MIN_ONE_SIDED_POINTS = 3
+MIN_POINTS_PER_SIDE_AFTER_REJECTION = 2
+CONTINUUM_REJECT_SIGMA = 2.0
+CONTINUUM_MIN_SIGMA_FRACTION = 1e-3
+CONTINUUM_TOLERANCE = 1e-9
+
+# LINE WIDTH: MEDIAN GAUSSIAN SIGMA OF ISOLATED, MODERATELY DEEP LINES FROM A COARSE FIRST PASS.
+MIN_WIDTH_LINES = 10
+WIDTH_DEPTH_RANGE = (0.2, 0.8)
+WIDTH_FIT_HALF_WINDOW_NM = 0.6
+WIDTH_SIGMA_BOUNDS_NM = (0.02, 0.6)
+MIN_WIDTH_FIT_POINTS = 8
+MIN_GAUSSIAN_AMPLITUDE = 1e-6
+SIGMA_BOUND_LOW_FACTOR = 1.01
+SIGMA_BOUND_HIGH_FACTOR = 0.99
+OTHER_LINE_TOLERANCE_NM = 1e-6
 
 # X-SHOOTER REFERENCE VALIDATION OF THE HITRAN LINE LIST.
 MIN_XSH_FRACTION = 0.5
@@ -72,9 +95,34 @@ SHOW_FIG = True
 OUTDIR = SOXS_ROOT / "plots_soxs_telluric_offsets"
 OUTFILE_PREFIX = f"{SOXS_MATCH_STRING}_telluric_offsets"
 
-RESULT_COLUMNS = ["wmin_nm", "offset_nm", "depth", "core_flux", "parabola_fallback", "ok", "reason"]
+RESULT_COLUMNS = [
+    "wmin_nm",
+    "offset_nm",
+    "depth",
+    "core_flux",
+    "continuum",
+    "core_ratio",
+    "continuum_mode",
+    "parabola_fallback",
+    "ok",
+    "reason",
+]
+LINES_TABLE_COLUMNS = [
+    "line_nm",
+    "wmin_nm",
+    "offset_nm",
+    "depth",
+    "core_flux",
+    "continuum",
+    "core_ratio",
+    "continuum_mode",
+    "parabola_fallback",
+    "reason",
+    "clipped",
+]
+CONTINUUM_MODES = ["two_sided", "one_sided"]
 LOADER_ERRORS = (OSError, KeyError, ValueError, TypeError)
-REASONS = ["ok", "too_few_points", "edge_minimum", "too_shallow", "saturated", "offset_too_large"]
+REASONS = ["ok", "too_few_points", "edge_minimum", "no_continuum", "too_shallow", "saturated", "offset_too_large"]
 
 COLOR_SOXS = "tab:cyan"
 COLOR_SOXS_SHIFTED = "tab:blue"
@@ -323,21 +371,26 @@ def refine_minimum_position(w, f, i0: int) -> tuple[float, bool]:
 def classify_minimum(
     i0: int,
     n_points: int,
-    depth: float,
-    core_flux: float,
+    continuum: float,
+    core_ratio: float,
     offset_nm: float,
     min_depth: float | None,
-    max_core_flux: float | None,
+    max_core_ratio: float | None,
     max_offset_nm: float,
 ) -> str:
     # RETURN THE FIRST FAILED CHECK, OR "ok" WHEN THE MINIMUM IS A TRUSTWORTHY LINE.
+    # THE ORDER MATTERS: A LATER CHECK ONLY RUNS WHEN THE EARLIER ONES PASS, AND THE DEPTH AND SATURATION
+    # CHECKS NEED A CONTINUUM, SO NO_CONTINUUM MUST COME BEFORE THEM. EDGE_MINIMUM NEEDS NO CONTINUUM.
     if i0 == 0 or i0 == n_points - 1:
         return "edge_minimum"
 
-    if min_depth is not None and (not np.isfinite(depth) or depth < min_depth):
+    if not np.isfinite(continuum):
+        return "no_continuum"
+
+    if min_depth is not None and 1.0 - core_ratio < min_depth:
         return "too_shallow"
 
-    if max_core_flux is not None and core_flux < max_core_flux:
+    if max_core_ratio is not None and core_ratio < max_core_ratio:
         return "saturated"
 
     if not np.isfinite(offset_nm) or abs(offset_nm) >= max_offset_nm:
@@ -346,21 +399,32 @@ def classify_minimum(
     return "ok"
 
 
+def core_ratio(core_flux: float, continuum: float) -> float:
+    # LOWEST FLUX DIVIDED BY THE CONTINUUM (NAN WITHOUT A CONTINUUM).
+    return core_flux / continuum if np.isfinite(continuum) else np.nan
+
+
 def minimum_result(
     reason: str,
     wmin_nm: float = np.nan,
     offset_nm: float = np.nan,
-    depth: float = np.nan,
     core_flux: float = np.nan,
+    continuum: float = np.nan,
     parabola_fallback: bool = False,
+    continuum_mode: str = "none",
 ) -> dict:
-    # ASSEMBLE ONE PER-LINE MEASUREMENT RECORD.
+    # ASSEMBLE ONE PER-LINE MEASUREMENT RECORD; DEPTH AND CORE RATIO FOLLOW FROM THE CORE FLUX AND CONTINUUM.
+    coreRatio = core_ratio(core_flux, continuum)
+
     return {
         "ok": reason == "ok",
         "wmin_nm": wmin_nm,
         "offset_nm": offset_nm,
-        "depth": depth,
+        "depth": 1.0 - coreRatio,
         "core_flux": core_flux,
+        "continuum": continuum,
+        "core_ratio": coreRatio,
+        "continuum_mode": continuum_mode,
         "parabola_fallback": parabola_fallback,
         "reason": reason,
     }
@@ -377,6 +441,112 @@ def extract_window(wave_nm, flux, line_nm: float, half_window_nm: float) -> tupl
     return wave_nm[inWindow], flux[inWindow]
 
 
+def has_both_sides(x: np.ndarray, min_points: int, min_per_side: int = 1) -> bool:
+    # TRUE WHEN THERE ARE ENOUGH POINTS WITH ENOUGH ON EACH SIDE OF THE CENTRE.
+    return x.size >= min_points and int((x < 0).sum()) >= min_per_side and int((x > 0).sum()) >= min_per_side
+
+
+def mask_near_lines(wave_nm: np.ndarray, lines_nm: np.ndarray | None, half_width_nm: float) -> np.ndarray:
+    # TRUE FOR PIXELS FARTHER THAN HALF_WIDTH_NM FROM EVERY LINE IN LINES_NM.
+    keep = np.ones(wave_nm.size, dtype=bool)
+
+    if lines_nm is None or wave_nm.size == 0:
+        return keep
+
+    lines_nm = np.asarray(lines_nm, dtype=float)
+    nearby = lines_nm[(lines_nm >= wave_nm.min() - half_width_nm) & (lines_nm <= wave_nm.max() + half_width_nm)]
+
+    if nearby.size:
+        keep = np.abs(wave_nm[:, None] - nearby[None, :]).min(axis=1) > half_width_nm
+
+    return keep
+
+
+def select_sideband_points(
+    wave_nm,
+    flux,
+    center_nm: float,
+    core_half_width_nm: float,
+    sideband_width_nm: float = SIDEBAND_WIDTH_NM,
+    masked_lines_nm: np.ndarray | None = None,
+    mask_half_width_nm: float | None = None,
+) -> tuple[np.ndarray, np.ndarray]:
+    # SIDEBAND PIXELS (OFFSET FROM CENTER_NM, FLUX): FROM THE CORE EDGE OUTWARD BY SIDEBAND_WIDTH_NM ON EACH SIDE.
+    wave_nm = np.asarray(wave_nm, dtype=float)
+    y = np.asarray(flux, dtype=float)
+    x = wave_nm - center_nm
+    maskHalf = core_half_width_nm if mask_half_width_nm is None else mask_half_width_nm
+
+    # DROP NON-FINITE PIXELS, THE CORE, THE OUTER EDGE, AND PIXELS CLOSE TO OTHER HITRAN LINES.
+    usable = np.isfinite(x) & np.isfinite(y) & (np.abs(x) > core_half_width_nm)
+    usable &= np.abs(x) <= core_half_width_nm + sideband_width_nm
+    usable &= mask_near_lines(wave_nm, masked_lines_nm, maskHalf)
+
+    return x[usable], y[usable]
+
+
+def fit_line_with_rejection(x: np.ndarray, y: np.ndarray) -> tuple[float, float]:
+    # STRAIGHT-LINE FIT WITH ONE REJECTION PASS; RETURN (SLOPE, INTERCEPT AT X = 0).
+    slope, intercept = np.polyfit(x, y, 1)
+
+    # DROP POINTS FAR BELOW THE FIT (BLENDED ABSORPTION) AND REFIT IF ENOUGH REMAIN ON BOTH SIDES.
+    resid = y - (intercept + slope * x)
+    madSigma = MAD_TO_SIGMA * np.median(np.abs(resid - np.median(resid)))
+    sigma = max(madSigma, CONTINUUM_MIN_SIGMA_FRACTION * abs(intercept))
+    keep = resid >= -(CONTINUUM_REJECT_SIGMA * sigma + CONTINUUM_TOLERANCE * np.median(np.abs(y)))
+    if not keep.all() and has_both_sides(x[keep], MIN_SIDEBAND_POINTS, MIN_POINTS_PER_SIDE_AFTER_REJECTION):
+        slope, intercept = np.polyfit(x[keep], y[keep], 1)
+
+    return float(slope), float(intercept)
+
+
+def one_sided_continuum(y: np.ndarray) -> float:
+    # FLAT CONTINUUM FROM ONE SIDEBAND: THE MEDIAN AFTER ONE PASS THAT DROPS POINTS FAR BELOW IT.
+    median = float(np.median(y))
+    sigma = max(MAD_TO_SIGMA * np.median(np.abs(y - median)), CONTINUUM_MIN_SIGMA_FRACTION * abs(median))
+    keep = y >= median - (CONTINUUM_REJECT_SIGMA * sigma + CONTINUUM_TOLERANCE * abs(median))
+
+    if not keep.all() and keep.sum() >= MIN_ONE_SIDED_POINTS:
+        return float(np.median(y[keep]))
+
+    return median
+
+
+def sideband_continuum(x: np.ndarray, y: np.ndarray) -> tuple[float, str]:
+    # CONTINUUM AT X = 0 AND ITS MODE: ONE-SIDED WHEN ONE SIDE HAS 0-1 POINTS AND THE OTHER ENOUGH, ELSE TWO-SIDED.
+    left, right = y[x < 0], y[x > 0]
+    short, long = sorted((left, right), key=len)
+
+    if short.size <= 1 and long.size >= MIN_ONE_SIDED_POINTS:
+        return one_sided_continuum(long), "one_sided"
+
+    if has_both_sides(x, MIN_SIDEBAND_POINTS):
+        return fit_line_with_rejection(x, y)[1], "two_sided"
+
+    return np.nan, "none"
+
+
+def continuum_at_minimum(
+    wave_nm,
+    flux,
+    wmin_nm: float,
+    core_half_width_nm: float,
+    sideband_width_nm: float = SIDEBAND_WIDTH_NM,
+    masked_lines_nm: np.ndarray | None = None,
+    mask_half_width_nm: float | None = None,
+) -> tuple[float, str]:
+    # SIDEBAND CONTINUUM AND ITS MODE AT THE MINIMUM: THE CORE AND THE SIDEBANDS ARE BOTH CENTRED ON THE MINIMUM.
+    reach = core_half_width_nm + sideband_width_nm
+    w, f = extract_window(wave_nm, flux, wmin_nm, reach)
+    x, y = select_sideband_points(
+        w, f, wmin_nm, core_half_width_nm, sideband_width_nm, masked_lines_nm, mask_half_width_nm
+    )
+    continuum, mode = sideband_continuum(x, y)
+
+    # A NAN CONTINUUM FAILS THE > 0 TEST, SO IT ALSO MAPS TO NONE.
+    return (continuum, mode) if continuum > 0 else (np.nan, "none")
+
+
 def find_local_minimum_near_line(
     wave_nm,
     flux,
@@ -385,28 +555,119 @@ def find_local_minimum_near_line(
     min_points: int = MIN_POINTS_IN_WINDOW,
     parabola_refine: bool = PARABOLA_REFINE,
     min_depth: float | None = MIN_DEPTH,
-    max_core_flux: float | None = MAX_CORE_FLUX,
+    max_core_ratio: float | None = MAX_CORE_RATIO,
     max_offset_nm: float = MAX_OFFSET_TO_ACCEPT_NM,
+    line_sigma_nm: float = DEFAULT_LINE_SIGMA_NM,
+    sideband_width_nm: float = SIDEBAND_WIDTH_NM,
+    other_lines_nm: np.ndarray | None = None,
 ) -> dict:
     # REQUIRE ENOUGH SAMPLES BEFORE LOOKING FOR A MINIMUM.
     w, f = extract_window(wave_nm, flux, line_nm, half_window_nm)
     if w.size < min_points:
         return minimum_result("too_few_points")
 
-    # START FROM THE LOWEST DISCRETE SAMPLE AND MEASURE ITS DEPTH BELOW THE LOCAL CONTINUUM.
+    # START FROM THE LOWEST DISCRETE SAMPLE.
     i0 = int(np.nanargmin(f))
     coreFlux = float(f[i0])
-    depth = float(np.percentile(f, CONTINUUM_PERCENTILE) - coreFlux)
 
     # REFINE ONLY INTERIOR MINIMA.
     wmin, isFallback = float(w[i0]), False
     if parabola_refine and 1 <= i0 <= w.size - 2:
         wmin, isFallback = refine_minimum_position(w, f, i0)
 
+    # MEASURE THE CORE AGAINST THE LOCAL CONTINUUM; THE CORE IS A FIXED NUMBER OF LINE SIGMAS WIDE.
+    coreHalfWidth = CORE_SIGMA_FACTOR * line_sigma_nm
+    maskHalfWidth = NEIGHBOUR_MASK_SIGMA_FACTOR * line_sigma_nm
+    continuum, mode = continuum_at_minimum(
+        wave_nm, flux, wmin, coreHalfWidth, sideband_width_nm, other_lines_nm, maskHalfWidth
+    )
     offset = wmin - line_nm
-    reason = classify_minimum(i0, w.size, depth, coreFlux, offset, min_depth, max_core_flux, max_offset_nm)
+    coreRatio = core_ratio(coreFlux, continuum)
+    reason = classify_minimum(i0, w.size, continuum, coreRatio, offset, min_depth, max_core_ratio, max_offset_nm)
 
-    return minimum_result(reason, wmin, offset, depth, coreFlux, isFallback)
+    return minimum_result(reason, wmin, offset, coreFlux, continuum, isFallback, mode)
+
+
+# =========================
+# LINE WIDTH
+# =========================
+def gaussian_with_slope(u, c0, c1, amplitude, centre, sigma):
+    # LINEAR CONTINUUM MINUS A GAUSSIAN ABSORPTION LINE.
+    return c0 + c1 * u - amplitude * np.exp(-0.5 * ((u - centre) / sigma) ** 2)
+
+
+def fit_gaussian_line(wave_nm, flux, wmin_nm: float, half_window_nm: float = WIDTH_FIT_HALF_WINDOW_NM) -> dict | None:
+    # FIT A GAUSSIAN PLUS LINEAR CONTINUUM AROUND THE MINIMUM; RETURN SIGMA AND FRACTIONAL DEPTH, OR NONE.
+    w, f = extract_window(wave_nm, flux, wmin_nm, half_window_nm)
+
+    if w.size < MIN_WIDTH_FIT_POINTS:
+        return None
+
+    u = w - wmin_nm
+    level = float(np.percentile(f, 90))
+    lowSigma, highSigma = WIDTH_SIGMA_BOUNDS_NM
+    p0 = [level, 0.0, max(level - float(f.min()), MIN_GAUSSIAN_AMPLITUDE), 0.0, DEFAULT_LINE_SIGMA_NM]
+    bounds = ([-np.inf, -np.inf, 0.0, -0.1, lowSigma], [np.inf, np.inf, np.inf, 0.1, highSigma])
+
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", OptimizeWarning)
+            popt, _ = curve_fit(gaussian_with_slope, u, f, p0=p0, bounds=bounds, maxfev=2000)
+    except (RuntimeError, ValueError):
+        return None
+
+    c0, c1, amplitude, centre, sigma = popt
+    continuum = c0 + c1 * centre
+
+    # A SIGMA AT A BOUND OR A NON-POSITIVE CONTINUUM MEANS THE FIT DID NOT FIND A LINE.
+    atBound = sigma <= lowSigma * SIGMA_BOUND_LOW_FACTOR or sigma >= highSigma * SIGMA_BOUND_HIGH_FACTOR
+    if continuum <= 0 or atBound:
+        return None
+
+    return {"sigma_nm": float(sigma), "depth": float(amplitude / continuum)}
+
+
+def estimate_line_sigma(
+    wave_nm,
+    flux,
+    lines_nm,
+    all_lines_nm: np.ndarray | None = None,
+    min_lines: int = MIN_WIDTH_LINES,
+    depth_range: tuple[float, float] = WIDTH_DEPTH_RANGE,
+) -> dict:
+    # MEDIAN GAUSSIAN SIGMA OF ISOLATED, MODERATELY DEEP, TWO-SIDED LINES ACCEPTED IN A COARSE PASS WITH THE DEFAULT
+    # WIDTH. THE COARSE PASS HAS NO OFFSET ESTIMATE YET, SO ITS NEIGHBOUR MASK USES THE HITRAN POSITIONS UNSHIFTED.
+    # ALSO RETURNS THE COARSE MEDIAN OFFSET, WHICH LATER PASSES USE TO ALIGN THE NEIGHBOUR MASK.
+    allLines = np.asarray(lines_nm if all_lines_nm is None else all_lines_nm, dtype=float)
+    coarse = measure_offsets_for_spectrum(wave_nm, flux, lines_nm, mask_lines_nm=allLines)
+    accepted = coarse.loc[coarse["ok"]]
+    medianOffset = clipped_median(accepted["offset_nm"])
+    sigmas, nFailed = [], 0
+
+    # A ONE-SIDED CONTINUUM IS FLAT, SO SLOPED LINES WOULD BIAS THE WIDTH: LEAVE THOSE LINES OUT.
+    for row in accepted.loc[accepted["continuum_mode"] == "two_sided"].itertuples():
+        others = allLines[np.abs(allLines - row.line_nm) > OTHER_LINE_TOLERANCE_NM]
+
+        # SKIP LINES WITH ANOTHER HITRAN LINE INSIDE THE FIT WINDOW.
+        if np.any(np.abs(others - row.line_nm) <= WIDTH_FIT_HALF_WINDOW_NM):
+            continue
+
+        fit = fit_gaussian_line(wave_nm, flux, row.wmin_nm)
+        if fit is None:
+            nFailed += 1
+        elif depth_range[0] <= fit["depth"] <= depth_range[1]:
+            sigmas.append(fit["sigma_nm"])
+
+    sigmaMad = MAD_TO_SIGMA * float(np.median(np.abs(sigmas - np.median(sigmas)))) if sigmas else np.nan
+    sigma = float(np.median(sigmas)) if len(sigmas) >= min_lines else DEFAULT_LINE_SIGMA_NM
+
+    return {
+        "sigma_nm": sigma,
+        "n_fits": len(sigmas),
+        "n_failed_fits": nFailed,
+        "sigma_mad_nm": sigmaMad,
+        "median_offset_nm": medianOffset if np.isfinite(medianOffset) else 0.0,
+    }
 
 
 # =========================
@@ -505,16 +766,25 @@ def derive_global_shift(
     lines_nm,
     search_half_window_nm: float = SEARCH_HALF_WINDOW_NM,
     refine_half_window_nm: float = REFINE_HALF_WINDOW_NM,
+    line_sigma_nm: float = DEFAULT_LINE_SIGMA_NM,
+    mask_lines_nm: np.ndarray | None = None,
+    mask_offset_nm: float = 0.0,
 ) -> dict:
-    # COARSE PASS: SHIFT = -(SIGMA-CLIPPED MEDIAN OF ACCEPTED PER-LINE OFFSETS).
-    coarse = measure_offsets_for_spectrum(wave_nm, flux, lines_nm, search_half_window_nm)
+    # COARSE PASS: SHIFT = -(SIGMA-CLIPPED MEDIAN OF ACCEPTED PER-LINE OFFSETS); MASK_OFFSET_NM ALIGNS THE MASK.
+    coarse = measure_offsets_for_spectrum(
+        wave_nm, flux, lines_nm, search_half_window_nm, line_sigma_nm, mask_lines_nm, mask_offset_nm
+    )
     coarseShift = -clipped_median(coarse.loc[coarse["ok"], "offset_nm"])
 
     if not np.isfinite(coarseShift):
         raise ValueError("No accepted line offsets to derive a global shift")
 
-    # REFINE PASS: REMEASURE ON THE SHIFTED AXIS WITH A NARROWER WINDOW AND ADD THE RESIDUAL.
-    refined = add_clip_flags(measure_offsets_for_spectrum(wave_nm + coarseShift, flux, lines_nm, refine_half_window_nm))
+    # REFINE PASS: REMEASURE ON THE SHIFTED AXIS (DATA LINES NOW AT HITRAN POSITIONS) WITH A NARROWER WINDOW.
+    refined = add_clip_flags(
+        measure_offsets_for_spectrum(
+            wave_nm + coarseShift, flux, lines_nm, refine_half_window_nm, line_sigma_nm, mask_lines_nm
+        )
+    )
     good = good_offsets(refined)
 
     if good.size == 0:
@@ -531,12 +801,20 @@ def derive_global_shift(
 # MEASURE ALL HITRAN OFFSETS
 # =========================
 def measure_offsets_for_spectrum(
-    wave_nm, flux, lines_nm, half_window_nm: float = SEARCH_HALF_WINDOW_NM
+    wave_nm,
+    flux,
+    lines_nm,
+    half_window_nm: float = SEARCH_HALF_WINDOW_NM,
+    line_sigma_nm: float = DEFAULT_LINE_SIGMA_NM,
+    mask_lines_nm: np.ndarray | None = None,
+    mask_offset_nm: float = 0.0,
 ) -> pd.DataFrame:
-    # MEASURE OFFSETS FOR ALL HITRAN LINES INSIDE THE SPECTRAL COVERAGE.
+    # MEASURE OFFSETS FOR ALL HITRAN LINES INSIDE THE SPECTRAL COVERAGE; MASK_LINES_NM IS THE FULL LINE LIST.
+    # MASK_OFFSET_NM IS THE KNOWN OFFSET OF THE DATA FROM HITRAN: THE MASKED POSITIONS ARE HITRAN + MASK_OFFSET_NM.
     wave_nm = np.asarray(wave_nm, dtype=float)
     flux = np.asarray(flux, dtype=float)
     lines_nm = np.asarray(lines_nm, dtype=float)
+    mask_lines_nm = None if mask_lines_nm is None else np.asarray(mask_lines_nm, dtype=float)
 
     if wave_nm.size == 0:
         lines_here = np.array([])
@@ -546,7 +824,13 @@ def measure_offsets_for_spectrum(
     # MEASURE EACH LINE INDEPENDENTLY.
     rows = []
     for line_nm in lines_here:
-        result = find_local_minimum_near_line(wave_nm, flux, line_nm, half_window_nm=half_window_nm)
+        others = None
+        if mask_lines_nm is not None:
+            others = mask_lines_nm[np.abs(mask_lines_nm - line_nm) > OTHER_LINE_TOLERANCE_NM] + mask_offset_nm
+
+        result = find_local_minimum_near_line(
+            wave_nm, flux, line_nm, half_window_nm=half_window_nm, line_sigma_nm=line_sigma_nm, other_lines_nm=others
+        )
         rows.append({"line_nm": line_nm, **result})
 
     return pd.DataFrame(rows, columns=["line_nm"] + RESULT_COLUMNS).astype({"line_nm": float, "ok": bool})
@@ -613,18 +897,47 @@ def differential_offsets(df: pd.DataFrame, reference: pd.DataFrame) -> pd.Series
     return df["offset_nm"] - df["line_nm"].map(referenceByLine)
 
 
-def measure_spectra(spectra: list, lines_nm: np.ndarray) -> list:
-    # MEASURE AND CLIP-FLAG EVERY SPECTRUM ON THE UNSHIFTED WAVELENGTH AXIS.
-    return [add_clip_flags(measure_offsets_for_spectrum(s["wave"], s["flux"], lines_nm)) for s in spectra]
+def measure_spectra(spectra: list, lines_nm: np.ndarray) -> tuple[list, list]:
+    # ESTIMATE THE LINE WIDTH, THEN MEASURE AND CLIP-FLAG EVERY SPECTRUM ON ITS UNSHIFTED WAVELENGTH AXIS.
+    results, sigmas = [], []
+
+    for s in spectra:
+        info = estimate_line_sigma(s["wave"], s["flux"], lines_nm)
+        measured = measure_offsets_for_spectrum(
+            s["wave"],
+            s["flux"],
+            lines_nm,
+            line_sigma_nm=info["sigma_nm"],
+            mask_lines_nm=lines_nm,
+            mask_offset_nm=info["median_offset_nm"],
+        )
+        results.append(add_clip_flags(measured))
+        sigmas.append(info)
+
+    return results, sigmas
 
 
-def build_analysis_results(soxs: list, lines_nm: np.ndarray, validation: pd.DataFrame) -> tuple[list, list]:
-    # COLLECT ORIGINAL AND SHIFTED OFFSET MEASUREMENTS PER SOXS SPECTRUM; RETURN (RESULTS, FAILED SPECTRA).
+def build_analysis_results(
+    soxs: list, lines_nm: np.ndarray, validation: pd.DataFrame, all_lines_nm: np.ndarray | None = None
+) -> tuple[list, list]:
+    # COLLECT ORIGINAL AND SHIFTED OFFSETS PER SOXS SPECTRUM; RETURN (RESULTS, FAILED SPECTRA).
+    # ALL_LINES_NM IS THE FULL HITRAN LIST, USED TO MASK NEIGHBOURING LINES OUT OF THE SIDEBANDS.
     results, failures = [], []
+    allLines = np.asarray(lines_nm if all_lines_nm is None else all_lines_nm, dtype=float)
 
     for s in soxs:
+        sigmaInfo = estimate_line_sigma(s["wave"], s["flux"], lines_nm, allLines)
+        sigma = sigmaInfo["sigma_nm"]
+
         try:
-            shiftInfo = derive_global_shift(s["wave"], s["flux"], lines_nm)
+            shiftInfo = derive_global_shift(
+                s["wave"],
+                s["flux"],
+                lines_nm,
+                line_sigma_nm=sigma,
+                mask_lines_nm=allLines,
+                mask_offset_nm=sigmaInfo["median_offset_nm"],
+            )
         except ValueError as e:
             print(f"[SOXS SHIFT ERROR] {s['file']}")
             print(f"                  {e}")
@@ -632,9 +945,21 @@ def build_analysis_results(soxs: list, lines_nm: np.ndarray, validation: pd.Data
             continue
 
         # MEASURE THE SHIFTED SPECTRUM WITH THE SAME WINDOW AS THE SHIFT ESTIMATOR (REFINE PASS).
-        original = add_clip_flags(measure_offsets_for_spectrum(s["wave"], s["flux"], lines_nm))
+        # THE UNSHIFTED DATA LINES SIT AT HITRAN MINUS THE SHIFT, SO THE NEIGHBOUR MASK MOVES BY -SHIFT.
+        original = add_clip_flags(
+            measure_offsets_for_spectrum(
+                s["wave"],
+                s["flux"],
+                lines_nm,
+                line_sigma_nm=sigma,
+                mask_lines_nm=allLines,
+                mask_offset_nm=-shiftInfo["shift_nm"],
+            )
+        )
         shifted = add_clip_flags(
-            measure_offsets_for_spectrum(s["wave"] + shiftInfo["shift_nm"], s["flux"], lines_nm, REFINE_HALF_WINDOW_NM)
+            measure_offsets_for_spectrum(
+                s["wave"] + shiftInfo["shift_nm"], s["flux"], lines_nm, REFINE_HALF_WINDOW_NM, sigma, allLines
+            )
         )
 
         results.append(
@@ -647,6 +972,7 @@ def build_analysis_results(soxs: list, lines_nm: np.ndarray, validation: pd.Data
                 "flux": s["flux"],
                 "shift_nm": shiftInfo["shift_nm"],
                 "shift_info": shiftInfo,
+                "sigma_info": sigmaInfo,
                 "results_original": original,
                 "results_shifted": shifted,
                 "differential_original": differential_offsets(original, validation),
@@ -1102,7 +1428,7 @@ def plot_line_cutout(
         ax.plot(row["wmin_nm"], np.interp(row["wmin_nm"], wave_nm[near], flux[near]), "x", ms=8, mew=2, color=color)
 
     status = row["reason"] if not row["ok"] else "clipped"
-    detail = f"offset={row['offset_nm']:+.3f} depth={row['depth']:.2f} core={row['core_flux']:.2f}"
+    detail = f"offset={row['offset_nm']:+.3f} depth={row['depth']:.2f} ratio={row['core_ratio']:.2f}"
     ax.set_title(f"{row['line_nm']:.3f} nm: {status}\n{detail}", fontsize=7)
     format_axes_no_scientific(ax)
 
@@ -1152,9 +1478,7 @@ def build_lines_table(
     spectrum: str, instrument: str, version: str, df: pd.DataFrame, differential: pd.Series | None = None
 ) -> pd.DataFrame:
     # ONE ROW PER MEASURED LINE FOR THE LINES CSV.
-    table = df[
-        ["line_nm", "wmin_nm", "offset_nm", "depth", "core_flux", "parabola_fallback", "reason", "clipped"]
-    ].copy()
+    table = df[LINES_TABLE_COLUMNS].copy()
     table.insert(0, "version", version)
     table.insert(0, "instrument", instrument)
     table.insert(0, "spectrum", spectrum)
@@ -1177,13 +1501,18 @@ def build_summary_row(
     shift_info: dict | None,
     differential_original: pd.Series | None = None,
     differential_shifted: pd.Series | None = None,
+    sigma_info: dict | None = None,
 ) -> dict:
-    # ONE ROW PER SPECTRUM FOR THE SUMMARY CSV (SHIFT, STATS AND REJECT COUNTS).
+    # ONE ROW PER SPECTRUM FOR THE SUMMARY CSV (SHIFT, LINE WIDTH, STATS AND REJECT COUNTS).
     row = {
         "spectrum": spectrum,
         "instrument": instrument,
         "status": "ok",
         "error": "",
+        "line_sigma_nm": np.nan if sigma_info is None else sigma_info["sigma_nm"],
+        "n_width_fits": 0 if sigma_info is None else sigma_info["n_fits"],
+        "n_width_failed": 0 if sigma_info is None else sigma_info["n_failed_fits"],
+        "line_sigma_mad_nm": np.nan if sigma_info is None else sigma_info["sigma_mad_nm"],
         "shift_nm": np.nan if shift_info is None else shift_info["shift_nm"],
         "n_lines": 0 if shift_info is None else shift_info["n_lines"],
         "n_measured": len(original),
@@ -1200,6 +1529,7 @@ def build_summary_row(
         row.update(stats_columns(name, values))
 
     row.update({f"reason_{reason}": count for reason, count in reject_counts(original).items()})
+    row.update({f"mode_{mode}": int((original["continuum_mode"] == mode).sum()) for mode in CONTINUUM_MODES})
 
     return row
 
@@ -1234,7 +1564,11 @@ def xshooter_name(spec: dict) -> str:
 
 
 def assemble_tables(
-    all_results: list, xshooter: list, xsh_results: list, failures: list | None = None
+    all_results: list,
+    xshooter: list,
+    xsh_results: list,
+    failures: list | None = None,
+    xsh_sigmas: list | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     # BUILD THE LINES AND SUMMARY TABLES FOR SOXS (ORIGINAL AND SHIFTED), X-SHOOTER (CONTROL) AND FAILED FILES.
     lines, summary = [], []
@@ -1252,19 +1586,23 @@ def assemble_tables(
                 res["shift_info"],
                 res["differential_original"],
                 res["differential_shifted"],
+                res["sigma_info"],
             )
         )
 
-    for spec, df in zip(xshooter, xsh_results):
+    sigmas = xsh_sigmas or [None] * len(xshooter)
+    for spec, df, sigmaInfo in zip(xshooter, xsh_results, sigmas):
         lines.append(build_lines_table(xshooter_name(spec), "XSHOOTER", "original", df))
-        summary.append(build_summary_row(xshooter_name(spec), "XSHOOTER", df, None, None))
+        summary.append(build_summary_row(xshooter_name(spec), "XSHOOTER", df, None, None, sigma_info=sigmaInfo))
 
     summary.extend(build_failed_row(f["instrument"], f) for f in failures or [])
 
     return pd.concat(lines, ignore_index=True), pd.DataFrame(summary)
 
 
-def print_report(all_results: list, xsh_results: list, validation: pd.DataFrame, failures: list) -> None:
+def print_report(
+    all_results: list, xsh_results: list, validation: pd.DataFrame, failures: list, xsh_sigmas: list | None = None
+) -> None:
     # PRINT THE X-SHOOTER CONTROL STATS, VALIDATION COUNTS, FAILED FILES AND PER-SPECTRUM SOXS RESULTS.
     if validation["validation_available"].all():
         nValid = int(validation["is_valid"].sum())
@@ -1282,6 +1620,10 @@ def print_report(all_results: list, xsh_results: list, validation: pd.DataFrame,
             f"median={control['median']:+.4f} nm, σ={control['sigma']:.4f} nm"
         )
 
+    if xsh_sigmas:
+        widths = [info["sigma_nm"] for info in xsh_sigmas]
+        print(f"X-shooter line sigma: median={np.median(widths):.3f} nm (range {min(widths):.3f} to {max(widths):.3f})")
+
     if failures:
         print(f"\n=== {len(failures)} FAILED FILES ===")
         for failure in failures:
@@ -1292,7 +1634,8 @@ def print_report(all_results: list, xsh_results: list, validation: pd.DataFrame,
         orig = robust_stats(good_offsets(res["results_original"]))
         shifted = robust_stats(good_offsets(res["results_shifted"]))
         print(
-            f"{res['date']}  shift={res['shift_nm']:+.4f} nm  N={res['shift_info']['n_lines']}  "
+            f"{res['date']}  sigma={res['sigma_info']['sigma_nm']:.3f} ({res['sigma_info']['n_fits']} fits)  "
+            f"shift={res['shift_nm']:+.4f} nm  N={res['shift_info']['n_lines']}  "
             f"original: med={orig['median']:+.4f} σ={orig['sigma']:.4f}  "
             f"shifted: med={shifted['median']:+.4f} σ={shifted['sigma']:.4f}  {res['name']}"
         )
@@ -1320,21 +1663,21 @@ def main() -> None:
         show_spectra_and_reference_line(soxs, xshooter, tell_nm_air, plot=True)
 
     # VALIDATE THE LINE LIST AGAINST THE X-SHOOTER REFERENCE SPECTRA.
-    xsh_results = measure_spectra(xshooter, tell_nm_air)
+    xsh_results, xsh_sigmas = measure_spectra(xshooter, tell_nm_air)
     validation = validate_reference_lines(xsh_results, tell_nm_air)
     measurement_lines = select_measurement_lines(validation)
 
     # MEASURE ALL LINE OFFSETS AND GLOBAL SHIFTS FOR EACH SOXS SPECTRUM.
     print("\nMeasuring offsets for HITRAN lines...")
-    all_results, analysisFailures = build_analysis_results(soxs, measurement_lines, validation)
+    all_results, analysisFailures = build_analysis_results(soxs, measurement_lines, validation, tell_nm_air)
     failures = soxsFailures + xshFailures + analysisFailures
-    print_report(all_results, xsh_results, validation, failures)
+    print_report(all_results, xsh_results, validation, failures, xsh_sigmas)
 
     if not all_results:
         print("No results to plot.")
         return
 
-    lines_table, summary_table = assemble_tables(all_results, xshooter, xsh_results, failures)
+    lines_table, summary_table = assemble_tables(all_results, xshooter, xsh_results, failures, xsh_sigmas)
     write_tables(lines_table, summary_table, validation)
 
     if DIAGNOSTIC_CUTOUTS:

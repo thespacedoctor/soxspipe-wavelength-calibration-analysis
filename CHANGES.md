@@ -17,6 +17,7 @@
 - **ENHANCEMENT**: name stellar and telluric lines in UV-VIS plot labels (`STELLAR_LINES_NAMED`, `TELLURIC_LINES_NAMED`); fixes the Ca II H label on the H epsilon window
 - **ENHANCEMENT**: add `PLOT_METRICS` switch for the UV-VIS notebook metrics plots, replacing an `if False:` block
 - **ENHANCEMENT**: NIR telluric script rejects false minima (edge, shallow, saturated) and measures only HITRAN lines validated against X-Shooter spectra
+- **ENHANCEMENT**: NIR telluric depth and saturation use a sideband continuum that scales with a per-spectrum line width estimate; `continuum_mode` marks one-sided fits
 - **REFACTOR**: split workspace into UV-VIS, NIR and shared folders, each with a README
 - **DOCS**: update the NIR README for the rewritten telluric script (method, settings, outputs, tests, known limitation)
 - **FIXED**: correct the telluric-window widening comment in the UV-VIS notebook (±7 Å, not ±5 Å)

@@ -22,15 +22,22 @@ def make_lines(wmin=WAVE_RANGE_NM[0], wmax=WAVE_RANGE_NM[1]):
     return np.arange(wmin + 1.5, wmax - 1.5, LINE_SPACING_NM) + 0.013
 
 
-def make_spectrum(lines, offset=0.0, depth=0.5, noise=0.003, seed=1, wave=None):
+def make_spectrum(lines, offset=0.0, depth=0.5, noise=0.003, seed=1, wave=None, sigma=LINE_SIGMA_NM):
     # CONTINUUM OF 1 WITH GAUSSIAN ABSORPTION LINES AT LINE + OFFSET.
     wave = make_wave() if wave is None else wave
     rng = np.random.default_rng(seed)
     flux = np.ones_like(wave)
     depths = np.broadcast_to(depth, np.shape(lines))
     for line, d in zip(lines, depths):
-        flux -= d * np.exp(-0.5 * ((wave - (line + offset)) / LINE_SIGMA_NM) ** 2)
+        flux -= d * np.exp(-0.5 * ((wave - (line + offset)) / sigma) ** 2)
     return wave, flux + rng.normal(0.0, noise, wave.size)
+
+
+def make_sloped_line_spectrum(line, slope, fractionalDepth, level=1.0, sigma=0.03):
+    # SLOPED CONTINUUM WITH ONE NARROW LINE ON A GRID SAMPLE (NOISE-FREE).
+    wave = make_wave()
+    continuum = level + slope * (wave - line)
+    return wave, continuum * (1.0 - fractionalDepth * np.exp(-0.5 * ((wave - line) / sigma) ** 2))
 
 
 def make_offsets_frame(lines, offsets, ok=None, clipped=None):
@@ -43,6 +50,9 @@ def make_offsets_frame(lines, offsets, ok=None, clipped=None):
             "offset_nm": offsets,
             "depth": 0.5,
             "core_flux": 0.5,
+            "continuum": 1.0,
+            "core_ratio": 0.5,
+            "continuum_mode": "two_sided",
             "ok": ok,
             "reason": np.where(ok, "ok", "too_shallow"),
             "parabola_fallback": False,
@@ -110,11 +120,11 @@ def test_flags_saturated_core():
     line = 1730.013
     wave, flux = make_spectrum([line], depth=0.98, noise=0.0)
 
-    result = m.find_local_minimum_near_line(wave, flux, line, max_core_flux=0.1)
+    result = m.find_local_minimum_near_line(wave, flux, line, max_core_ratio=0.1)
 
     assert not result["ok"]
     assert result["reason"] == "saturated"
-    assert result["core_flux"] < 0.1
+    assert result["core_ratio"] < 0.1
 
 
 def test_accepts_discrete_minimum_when_parabola_refine_disabled():
@@ -127,14 +137,370 @@ def test_accepts_discrete_minimum_when_parabola_refine_disabled():
     assert result["wmin_nm"] in wave
 
 
-def test_reports_depth_and_core_flux_for_accepted_line():
-    line = 1730.013
-    wave, flux = make_spectrum([line], depth=0.5, noise=0.0)
+def test_reports_fractional_depth_core_flux_and_continuum_for_accepted_line():
+    line = 1730.0
+    wave, flux = make_sloped_line_spectrum(line, slope=0.0, fractionalDepth=0.5)
 
     result = m.find_local_minimum_near_line(wave, flux, line)
 
-    assert result["depth"] == pytest.approx(0.5, abs=0.05)
-    assert result["core_flux"] == pytest.approx(0.5, abs=0.05)
+    assert result["depth"] == pytest.approx(0.5, abs=0.02)
+    assert result["core_flux"] == pytest.approx(0.5, abs=0.02)
+    assert result["continuum"] == pytest.approx(1.0, abs=0.02)
+    assert result["core_ratio"] == pytest.approx(0.5, abs=0.02)
+
+
+def test_accepts_line_on_steep_sloped_continuum_with_correct_fractional_depth():
+    line = 1730.0
+    wave, flux = make_sloped_line_spectrum(line, slope=0.4, fractionalDepth=0.4)
+
+    result = m.find_local_minimum_near_line(wave, flux, line)
+
+    assert result["ok"]
+    assert result["depth"] == pytest.approx(0.4, abs=0.03)
+
+
+def test_rejects_shallow_line_on_slope_that_a_window_percentile_would_accept():
+    line = 1730.0
+    wave, flux = make_sloped_line_spectrum(line, slope=0.1, fractionalDepth=0.04)
+
+    result = m.find_local_minimum_near_line(wave, flux, line, min_depth=0.05)
+
+    assert result["reason"] == "too_shallow"
+    assert result["depth"] == pytest.approx(0.04, abs=0.01)
+
+
+@pytest.mark.parametrize("scale", [0.5, 1.0, 2.0])
+def test_saturation_classification_is_invariant_to_flux_scale(scale):
+    line = 1730.0
+    wave, deepFlux = make_sloped_line_spectrum(line, slope=0.0, fractionalDepth=0.95)
+    _, midFlux = make_sloped_line_spectrum(line, slope=0.0, fractionalDepth=0.5)
+
+    deep = m.find_local_minimum_near_line(wave, scale * deepFlux, line)
+    mid = m.find_local_minimum_near_line(wave, scale * midFlux, line)
+
+    assert deep["reason"] == "saturated"
+    assert mid["reason"] == "ok"
+    assert deep["core_ratio"] == pytest.approx(0.05, abs=0.01)
+    assert deep["depth"] == pytest.approx(0.95, abs=0.01)
+
+
+def test_blended_neighbour_in_sideband_does_not_wreck_the_continuum():
+    line = 1730.0
+    wave, flux = make_sloped_line_spectrum(line, slope=0.0, fractionalDepth=0.7)
+    # DEEP NEIGHBOUR 0.18 NM AWAY: OUTSIDE THE 0.1 NM CORE (2.5 * 0.04) BUT INSIDE THE SIDEBAND.
+    flux = flux - 0.4 * np.exp(-0.5 * ((wave - (line + 0.18)) / 0.02) ** 2)
+
+    result = m.find_local_minimum_near_line(wave, flux, line, line_sigma_nm=0.04)
+
+    assert result["ok"]
+    assert result["continuum"] == pytest.approx(1.0, abs=0.02)
+    assert result["depth"] == pytest.approx(0.7, abs=0.03)
+
+
+@pytest.mark.parametrize("seed", [0, 1, 2])
+def test_offset_line_wing_does_not_leak_into_the_sidebands(seed):
+    # THE LINE SITS 0.08 NM FROM THE HITRAN POSITION; THE CORE MUST FOLLOW THE MEASURED MINIMUM.
+    line = 1730.0
+    centre = line + 0.08
+    wave = make_wave()
+    wave = wave + (centre - wave[np.argmin(np.abs(wave - centre))])
+    wave, flux = make_spectrum([centre], depth=0.5, noise=0.003, seed=seed, wave=wave, sigma=0.045)
+
+    result = m.find_local_minimum_near_line(wave, flux, line)
+
+    assert result["ok"]
+    assert result["offset_nm"] == pytest.approx(0.08, abs=0.01)
+    assert result["depth"] == pytest.approx(0.5, abs=0.02)
+
+
+@pytest.mark.parametrize("seed", [0, 1, 2])
+def test_continuum_window_follows_a_minimum_far_from_the_hitran_position(seed):
+    # THE LINE SITS -0.15 NM FROM THE HITRAN POSITION: THE SIDEBAND WINDOW MUST FOLLOW THE MINIMUM.
+    line = 1730.0
+    centre = line - 0.15
+    wave = make_wave()
+    wave = wave + (centre - wave[np.argmin(np.abs(wave - centre))])
+    wave, flux = make_spectrum([centre], depth=0.5, noise=0.003, seed=seed, wave=wave, sigma=0.045)
+
+    result = m.find_local_minimum_near_line(wave, flux, line)
+
+    assert result["ok"]
+    assert result["offset_nm"] == pytest.approx(-0.15, abs=0.01)
+    assert result["continuum"] == pytest.approx(1.0, abs=0.02)
+    assert result["depth"] == pytest.approx(0.5, abs=0.02)
+
+
+def test_reports_no_continuum_when_one_sideband_is_missing():
+    line = 1730.0
+    wave, flux = make_sloped_line_spectrum(line, slope=0.0, fractionalDepth=0.5)
+    keep = wave >= line - 0.1
+
+    result = m.find_local_minimum_near_line(wave[keep], flux[keep], line, sideband_width_nm=0.1)
+
+    assert result["reason"] == "no_continuum"
+    assert np.isnan(result["continuum"])
+    assert result["continuum_mode"] == "none"
+    assert not result["ok"]
+
+
+def test_reports_no_continuum_when_too_few_sideband_points():
+    line = 1730.0
+    wave, flux = make_sloped_line_spectrum(line, slope=0.0, fractionalDepth=0.5)
+
+    result = m.find_local_minimum_near_line(wave, flux, line, sideband_width_nm=0.1)
+
+    assert result["reason"] == "no_continuum"
+
+
+def test_reports_no_continuum_when_fitted_continuum_is_not_positive():
+    line = 1730.0
+    wave, _ = make_sloped_line_spectrum(line, slope=0.0, fractionalDepth=0.5)
+    flux = -1.0 - 0.5 * np.exp(-0.5 * ((wave - line) / 0.03) ** 2)
+
+    result = m.find_local_minimum_near_line(wave, flux, line)
+
+    assert result["reason"] == "no_continuum"
+
+
+def test_sidebands_are_independent_of_the_minimum_search_window():
+    line = 1730.0
+    wave, flux = make_sloped_line_spectrum(line, slope=0.0, fractionalDepth=0.5)
+
+    result = m.find_local_minimum_near_line(wave, flux, line, half_window_nm=0.15)
+
+    assert result["ok"]
+    assert result["continuum"] == pytest.approx(1.0, abs=0.02)
+
+
+def test_continuum_at_minimum_evaluates_the_sideband_line_at_the_minimum_and_ignores_the_core():
+    wave = np.arange(-0.25, 0.2501, 0.06)
+    flux = 1.0 + 0.2 * wave
+    flux[np.abs(wave) <= 0.1] = 0.1
+
+    continuum, mode = m.continuum_at_minimum(wave + 1730.0, flux, 1730.0, core_half_width_nm=0.1)
+
+    assert continuum == pytest.approx(1.0)
+    assert mode == "two_sided"
+
+
+def test_continuum_at_minimum_is_unavailable_without_enough_sideband_points():
+    wave = np.arange(0.0, 0.1501, 0.06)
+
+    continuum, mode = m.continuum_at_minimum(wave + 1730.0, np.ones_like(wave), 1730.0, core_half_width_nm=0.1)
+
+    assert np.isnan(continuum)
+    assert mode == "none"
+
+
+def make_gaussian_dip(wave, centre, depth, sigma, level=1.0):
+    return level * (1.0 - depth * np.exp(-0.5 * ((wave - centre) / sigma) ** 2))
+
+
+@pytest.mark.parametrize("sigma", [0.12, 0.14])
+def test_broad_saturated_line_gets_unbiased_continuum_and_is_saturated(sigma):
+    line = 1730.0
+    wave = make_wave()
+    flux = make_gaussian_dip(wave, line, 0.95, sigma)
+
+    result = m.find_local_minimum_near_line(wave, flux, line, line_sigma_nm=sigma)
+
+    assert result["continuum"] == pytest.approx(1.0, abs=0.03)
+    assert result["reason"] == "saturated"
+
+
+def test_broad_shallow_line_keeps_correct_fractional_depth():
+    line = 1730.0
+    wave = make_wave()
+    flux = make_gaussian_dip(wave, line, 0.3, 0.14)
+
+    result = m.find_local_minimum_near_line(wave, flux, line, line_sigma_nm=0.14)
+
+    assert result["ok"]
+    assert result["depth"] == pytest.approx(0.3, abs=0.03)
+    assert result["continuum"] == pytest.approx(1.0, abs=0.03)
+
+
+def test_core_width_scales_with_the_line_sigma():
+    line = 1730.0
+    wave = make_wave()
+    flux = make_gaussian_dip(wave, line, 0.7, 0.14)
+
+    narrowCore = m.find_local_minimum_near_line(wave, flux, line, line_sigma_nm=0.04)
+    broadCore = m.find_local_minimum_near_line(wave, flux, line, line_sigma_nm=0.14)
+
+    assert abs(broadCore["continuum"] - 1.0) < abs(narrowCore["continuum"] - 1.0)
+
+
+def test_neighbour_hitran_line_is_masked_out_of_the_sidebands():
+    line = 1730.0
+    wave = make_wave()
+    # THE MASK IS 1 SIGMA (0.04 NM) WIDE, SO THE NEIGHBOUR IS NARROW ENOUGH FOR THE MASK TO COVER ITS CORE.
+    flux = make_gaussian_dip(wave, line, 0.7, 0.03) - 0.6 * np.exp(-0.5 * ((wave - (line + 0.19)) / 0.02) ** 2)
+
+    masked = m.find_local_minimum_near_line(
+        wave, flux, line, line_sigma_nm=0.04, other_lines_nm=np.array([line + 0.19])
+    )
+    unmasked = m.find_local_minimum_near_line(wave, flux, line, line_sigma_nm=0.04)
+
+    assert masked["continuum"] == pytest.approx(1.0, abs=0.02)
+    assert abs(unmasked["continuum"] - 1.0) > abs(masked["continuum"] - 1.0)
+
+
+def test_neighbour_line_one_and_a_half_sigma_beyond_the_core_does_not_empty_a_sideband():
+    # LINE SIGMA 0.1: CORE 0.25 NM, SIDEBAND 0.25-0.5 NM. THE NEIGHBOUR AT +0.55 NM WOULD HAVE MASKED 0.30-0.80 NM
+    # WITH A CORE-WIDE MASK, LEAVING THE RIGHT SIDEBAND EMPTY. THE 1 SIGMA MASK ONLY REMOVES 0.45-0.65 NM.
+    line = 1730.0
+    wave = make_wave()
+    flux = make_gaussian_dip(wave, line, 0.5, 0.04)
+
+    result = m.find_local_minimum_near_line(wave, flux, line, other_lines_nm=np.array([line + 0.55]))
+
+    assert result["ok"]
+    assert result["continuum_mode"] == "two_sided"
+    assert result["depth"] == pytest.approx(0.5, abs=0.02)
+
+
+def test_one_sided_continuum_gives_correct_depth_on_flat_continuum():
+    line = 1730.0
+    wave = make_wave()
+    flux = make_gaussian_dip(wave, line, 0.5, 0.04)
+    keep = wave >= line - 0.1
+
+    result = m.find_local_minimum_near_line(wave[keep], flux[keep], line, line_sigma_nm=0.04)
+
+    assert result["ok"]
+    assert result["continuum_mode"] == "one_sided"
+    assert result["continuum"] == pytest.approx(1.0, abs=0.01)
+    assert result["depth"] == pytest.approx(0.5, abs=0.02)
+
+
+def test_one_sided_continuum_works_on_the_left_side_too():
+    line = 1730.0
+    wave = make_wave()
+    flux = make_gaussian_dip(wave, line, 0.5, 0.04)
+    keep = wave <= line + 0.1
+
+    result = m.find_local_minimum_near_line(wave[keep], flux[keep], line, line_sigma_nm=0.04)
+
+    assert result["continuum_mode"] == "one_sided"
+    assert result["depth"] == pytest.approx(0.5, abs=0.02)
+
+
+def test_one_sided_continuum_applies_when_the_short_side_has_a_single_point():
+    line = 1730.0
+    wave = make_wave()
+    flux = make_gaussian_dip(wave, line, 0.5, 0.04)
+    # KEEP ONE POINT (1729.88, 0.12 NM FROM THE LINE) ON THE LEFT SIDEBAND.
+    keep = wave >= line - 0.13
+
+    result = m.find_local_minimum_near_line(wave[keep], flux[keep], line, line_sigma_nm=0.04)
+
+    assert result["continuum_mode"] == "one_sided"
+
+
+def test_two_sided_mode_is_recorded_when_both_sidebands_have_points():
+    line = 1730.0
+    wave = make_wave()
+    flux = make_gaussian_dip(wave, line, 0.5, 0.04)
+
+    result = m.find_local_minimum_near_line(wave, flux, line, line_sigma_nm=0.04)
+
+    assert result["continuum_mode"] == "two_sided"
+
+
+def test_one_sided_continuum_is_a_robust_median():
+    values = np.array([1.0, 1.02, 0.98, 0.4, 1.01, 0.99])
+
+    assert m.one_sided_continuum(values) == pytest.approx(1.0, abs=0.02)
+    assert np.mean(values) < 0.95
+
+
+def test_neighbour_displaced_by_the_spectrum_shift_is_masked_when_the_mask_offset_is_given():
+    # EVERY LINE IN THE DATA SITS 0.12 NM REDWARD OF ITS HITRAN POSITION, INCLUDING THE NEIGHBOUR AT +0.35 NM.
+    line, shift = 1730.0, 0.12
+    wave = make_wave()
+    wave = wave + (line + shift - wave[np.argmin(np.abs(wave - (line + shift)))])
+    flux = make_gaussian_dip(wave, line + shift, 0.5, 0.04) - 0.6 * np.exp(
+        -0.5 * ((wave - (line + 0.35 + shift)) / 0.02) ** 2
+    )
+    lines, allLines = np.array([line]), np.array([line, line + 0.35])
+
+    aligned = m.measure_offsets_for_spectrum(wave, flux, lines, mask_lines_nm=allLines, mask_offset_nm=shift)
+    unaligned = m.measure_offsets_for_spectrum(wave, flux, lines, mask_lines_nm=allLines)
+
+    assert aligned["continuum"].iloc[0] == pytest.approx(1.0, abs=0.02)
+    assert abs(unaligned["continuum"].iloc[0] - 1.0) > abs(aligned["continuum"].iloc[0] - 1.0)
+
+
+def test_one_sided_continuum_bias_on_a_sloped_continuum_stays_within_the_documented_bound():
+    # A FLAT ONE-SIDED CONTINUUM IS BIASED BY ABOUT SLOPE * (DISTANCE OF THE SIDEBAND FROM THE MINIMUM).
+    line, slope, coreHalf, width = 1730.0, 0.4, 0.1, 0.25
+    wave, flux = make_sloped_line_spectrum(line, slope=slope, fractionalDepth=0.5)
+    keep = wave >= line - 0.1
+
+    result = m.find_local_minimum_near_line(wave[keep], flux[keep], line, line_sigma_nm=0.04)
+
+    bias = result["continuum"] - 1.0
+    assert result["continuum_mode"] == "one_sided"
+    assert 0.0 < bias <= slope * (coreHalf + width)
+    assert bias == pytest.approx(slope * (coreHalf + width / 2), abs=0.04)
+
+
+def test_nan_pixel_in_the_sideband_still_gives_a_fit():
+    wave = np.arange(-0.4, 0.4001, 0.06) + 1730.0
+    flux = 1.0 + 0.2 * (wave - 1730.0)
+    flux[np.abs(wave - 1730.0) <= 0.1] = 0.1
+    flux[3] = np.nan
+
+    continuum, mode = m.continuum_at_minimum(wave, flux, 1730.0, core_half_width_nm=0.1)
+
+    assert continuum == pytest.approx(1.0)
+    assert mode == "two_sided"
+
+
+def test_infinite_pixel_in_the_sideband_is_ignored():
+    wave = np.arange(-0.4, 0.4001, 0.06) + 1730.0
+    flux = np.ones_like(wave)
+    flux[2] = np.inf
+
+    continuum, _ = m.continuum_at_minimum(wave, flux, 1730.0, core_half_width_nm=0.1)
+
+    assert continuum == pytest.approx(1.0, abs=1e-9)
+
+
+def test_tiny_flux_scale_gives_the_same_classification_as_unit_scale():
+    line = 1730.0
+    wave = make_wave()
+    flux = make_gaussian_dip(wave, line, 0.6, 0.04) - 0.4 * np.exp(-0.5 * ((wave - (line + 0.18)) / 0.02) ** 2)
+
+    unit = m.find_local_minimum_near_line(wave, flux, line, line_sigma_nm=0.04)
+    tiny = m.find_local_minimum_near_line(wave, 1e-16 * flux, line, line_sigma_nm=0.04)
+
+    assert tiny["reason"] == unit["reason"]
+    assert tiny["depth"] == pytest.approx(unit["depth"], abs=1e-6)
+    assert tiny["continuum"] == pytest.approx(1e-16 * unit["continuum"], rel=1e-6)
+
+
+def test_few_noisy_sideband_points_give_negligible_mean_continuum_bias():
+    # THREE POINTS PER SIDE; THE ONE-SIDED REJECTION MUST NOT PUSH THE CONTINUUM UP SYSTEMATICALLY.
+    x = np.array([-0.34, -0.30, -0.26, 0.26, 0.30, 0.34])
+    biases = []
+    for seed in range(300):
+        y = 1.0 + np.random.default_rng(seed).normal(0.0, 0.02, x.size)
+        continuum, _ = m.continuum_at_minimum(x + 1730.0, y, 1730.0, core_half_width_nm=0.25)
+        biases.append(continuum - 1.0)
+
+    assert abs(np.mean(biases)) < 0.01
+
+
+def test_fit_keeps_first_fit_when_rejection_would_leave_one_point_per_side():
+    # THE DIPPED POINT ON THE SPARSE RIGHT SIDE IS REJECTED, WHICH WOULD LEAVE ONLY ONE POINT THERE.
+    wave = np.array([-0.50, -0.46, -0.42, -0.38, -0.34, -0.30, -0.26, 0.26, 0.30]) + 1730.0
+    flux = np.array([1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.6])
+
+    continuum, _ = m.continuum_at_minimum(wave, flux, 1730.0, core_half_width_nm=0.25, sideband_width_nm=0.3)
+
+    assert continuum < 0.95
 
 
 # =========================
@@ -148,7 +514,8 @@ def test_measure_offsets_returns_one_row_per_line_in_coverage():
     df = m.measure_offsets_for_spectrum(wave, flux, np.concatenate([outside, lines]))
 
     assert len(df) == lines.size
-    assert {"line_nm", "wmin_nm", "offset_nm", "depth", "core_flux", "ok", "reason"} <= set(df.columns)
+    expected = {"line_nm", "wmin_nm", "offset_nm", "depth", "core_flux", "continuum", "core_ratio", "ok", "reason"}
+    assert expected <= set(df.columns)
     assert np.nanmedian(df.loc[df["ok"], "offset_nm"]) == pytest.approx(0.04, abs=0.01)
 
 
@@ -394,7 +761,8 @@ def test_build_summary_row_reports_shift_stats_and_reject_counts():
     original = m.add_clip_flags(m.measure_offsets_for_spectrum(wave, flux, lines))
     shifted = m.add_clip_flags(m.measure_offsets_for_spectrum(wave + shiftInfo["shift_nm"], flux, lines))
 
-    row = m.build_summary_row("test.fits", "SOXS", original, shifted, shiftInfo)
+    sigmaInfo = {"sigma_nm": 0.12, "n_fits": 25, "n_failed_fits": 3, "sigma_mad_nm": 0.015}
+    row = m.build_summary_row("test.fits", "SOXS", original, shifted, shiftInfo, sigma_info=sigmaInfo)
 
     assert row["spectrum"] == "test.fits"
     assert row["shift_nm"] == pytest.approx(-0.08, abs=0.01)
@@ -402,6 +770,12 @@ def test_build_summary_row_reports_shift_stats_and_reject_counts():
     assert row["median_shifted_nm"] == pytest.approx(0.0, abs=0.01)
     assert row["n_ok"] == int(original["ok"].sum())
     assert "reason_edge_minimum" in row
+    assert row["line_sigma_nm"] == 0.12
+    assert row["n_width_fits"] == 25
+    assert row["n_width_failed"] == 3
+    assert row["line_sigma_mad_nm"] == 0.015
+    assert row["mode_two_sided"] + row["mode_one_sided"] <= row["n_measured"]
+    assert row["mode_one_sided"] == int((original["continuum_mode"] == "one_sided").sum())
 
 
 # =========================
@@ -426,7 +800,7 @@ def make_pipeline_inputs(tmp_path):
 
 def test_pipeline_validates_lines_and_builds_shifted_results_with_differentials(tmp_path):
     lines, xsh, soxs = make_pipeline_inputs(tmp_path)
-    xshResults = m.measure_spectra(xsh, lines)
+    xshResults, _xshSigmas = m.measure_spectra(xsh, lines)
     validation = m.validate_reference_lines(xshResults, lines)
     validLines = validation.loc[validation["is_valid"], "line_nm"].to_numpy()
 
@@ -481,13 +855,13 @@ def test_differential_is_nan_when_validation_unavailable(tmp_path):
 
 def test_pipeline_writes_lines_summary_and_reference_csvs(tmp_path, monkeypatch):
     lines, xsh, soxs = make_pipeline_inputs(tmp_path)
-    xshResults = m.measure_spectra(xsh, lines)
+    xshResults, xshSigmas = m.measure_spectra(xsh, lines)
     validation = m.validate_reference_lines(xshResults, lines)
     results, _ = m.build_analysis_results(soxs, lines[:-1], validation)
     monkeypatch.setattr(m, "OUTDIR", tmp_path / "out")
     monkeypatch.setattr(m, "OUTFILE_PREFIX", "TEST")
 
-    linesTable, summaryTable = m.assemble_tables(results, xsh, xshResults)
+    linesTable, summaryTable = m.assemble_tables(results, xsh, xshResults, None, xshSigmas)
     m.write_tables(linesTable, summaryTable, validation)
 
     written = pd.read_csv(tmp_path / "out" / "TEST_summary.csv")
@@ -562,12 +936,12 @@ def test_build_failed_row_marks_status_and_error():
 
 def test_summary_table_includes_failed_files(tmp_path):
     lines, xsh, soxs = make_pipeline_inputs(tmp_path)
-    xshResults = m.measure_spectra(xsh, lines)
+    xshResults, xshSigmas = m.measure_spectra(xsh, lines)
     validation = m.validate_reference_lines(xshResults, lines)
     results, _ = m.build_analysis_results(soxs, lines, validation)
     failures = [{"instrument": "XSHOOTER", "file": Path("obs9/x.fits"), "error": "bad header"}]
 
-    _, summary = m.assemble_tables(results, xsh, xshResults, failures)
+    _, summary = m.assemble_tables(results, xsh, xshResults, failures, xshSigmas)
 
     failed = summary.loc[summary["status"] == "failed"]
     assert failed["spectrum"].tolist() == ["obs9/x.fits"]
@@ -636,11 +1010,7 @@ def test_parabola_minimum_does_not_swallow_unexpected_errors(monkeypatch):
 def test_records_parabola_fallback_when_fit_fails(monkeypatch):
     line = 1730.013
     wave, flux = make_spectrum([line], noise=0.0)
-
-    def fail(*args, **kwargs):
-        raise np.linalg.LinAlgError("no convergence")
-
-    monkeypatch.setattr(m.np, "polyfit", fail)
+    monkeypatch.setattr(m, "fit_local_parabola_minimum", lambda x, y: (np.nan, np.nan, None, None))
 
     result = m.find_local_minimum_near_line(wave, flux, line)
 
@@ -658,3 +1028,84 @@ def test_parabola_fallback_is_false_for_normal_and_unrefined_lines():
 
     assert not refined["parabola_fallback"]
     assert not discrete["parabola_fallback"]
+
+
+# =========================
+# LINE WIDTH
+# =========================
+@pytest.mark.parametrize("sigma", [0.08, 0.12, 0.2])
+def test_estimate_line_sigma_recovers_injected_sigma_within_ten_percent(sigma):
+    lines = make_lines()
+    wave, flux = make_spectrum(lines, depth=0.5, noise=0.003, sigma=sigma, seed=7)
+
+    info = m.estimate_line_sigma(wave, flux, lines)
+
+    assert info["sigma_nm"] == pytest.approx(sigma, rel=0.1)
+    assert info["n_fits"] >= m.MIN_WIDTH_LINES
+    assert info["n_failed_fits"] >= 0
+    assert 0.0 <= info["sigma_mad_nm"] < 0.02
+
+
+def test_estimate_line_sigma_falls_back_to_default_with_too_few_fits():
+    lines = make_lines()[:3]
+    wave, flux = make_spectrum(lines, depth=0.5, sigma=0.15)
+
+    info = m.estimate_line_sigma(wave, flux, lines)
+
+    assert info["sigma_nm"] == m.DEFAULT_LINE_SIGMA_NM
+    assert info["n_fits"] < m.MIN_WIDTH_LINES
+
+
+def test_estimate_line_sigma_ignores_lines_with_a_close_neighbour():
+    lines = make_lines()
+    wave, flux = make_spectrum(lines, depth=0.5, sigma=0.12, noise=0.003)
+    crowded = np.concatenate([lines, lines + 0.3])
+
+    isolated = m.estimate_line_sigma(wave, flux, lines)
+    withNeighbours = m.estimate_line_sigma(wave, flux, lines, all_lines_nm=crowded)
+
+    assert withNeighbours["n_fits"] == 0
+    assert isolated["n_fits"] > 0
+
+
+def test_estimate_line_sigma_ignores_lines_outside_the_depth_range():
+    lines = make_lines()
+    wave, flux = make_spectrum(lines, depth=0.95, sigma=0.12, noise=0.003)
+
+    info = m.estimate_line_sigma(wave, flux, lines)
+
+    assert info["n_fits"] == 0
+    assert info["sigma_nm"] == m.DEFAULT_LINE_SIGMA_NM
+
+
+def test_measure_spectra_returns_a_line_sigma_per_spectrum(tmp_path):
+    lines, xsh, _ = make_pipeline_inputs(tmp_path)
+
+    results, sigmas = m.measure_spectra(xsh, lines)
+
+    assert len(results) == len(sigmas) == len(xsh)
+    assert all(info["sigma_nm"] > 0 for info in sigmas)
+
+
+def test_estimate_line_sigma_excludes_lines_with_a_one_sided_continuum():
+    lines = make_lines()
+    wave, flux = make_spectrum(lines, depth=0.5, sigma=0.12, noise=0.003)
+    # REMOVE THE RIGHT SIDEBAND OF EVERY LINE SO THAT EACH HAS ONLY A ONE-SIDED CONTINUUM.
+    gap = np.zeros(wave.size, dtype=bool)
+    for line in lines:
+        gap |= (wave > line + 0.1) & (wave < line + 0.6)
+
+    info = m.estimate_line_sigma(wave[~gap], flux[~gap], lines)
+
+    assert info["n_fits"] == 0
+    assert info["sigma_nm"] == m.DEFAULT_LINE_SIGMA_NM
+
+
+def test_estimate_line_sigma_reports_failed_fits():
+    lines = make_lines()
+    wave, flux = make_spectrum(lines, depth=0.5, sigma=0.12, noise=0.003)
+
+    info = m.estimate_line_sigma(wave, flux, lines, min_lines=1)
+
+    assert info["n_fits"] > 0
+    assert info["n_failed_fits"] == 0
