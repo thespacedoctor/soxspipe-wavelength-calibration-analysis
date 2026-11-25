@@ -1,22 +1,25 @@
 # SOXS NIR wavelength calibration analysis
 
-This folder holds the script and data that measure the wavelength offsets of SOXS NIR spectra against HITRAN telluric lines. It is for people who run or change the analysis.
+This folder contains the `soxs_telluric_wavelength_offsets.py` script (originally written by Michael and adapted by Dave) and data that measure wavelength offsets in SOXS NIR spectra against HITRAN telluric lines. 
 
-## Contents
+Here is an overview of the updates they have made to the script:
 
-- [What the script does](#what-the-script-does)
-- [Folder layout](#folder-layout)
-- [How to run the script](#how-to-run-the-script)
-- [Settings](#settings)
-- [Wavelength conversion](#wavelength-conversion)
-- [Outputs](#outputs)
-- [Data sets](#data-sets)
-- [Compare pipeline versions](#compare-pipeline-versions)
-- [Re-reduce one exposure with rerun.sh](#re-reduce-one-exposure-with-rerunsh)
+* A more robust measurement of the minima of the telluric lines, rejecting the null/erroneous fits. These were hard to find without visualising how the code fit the minima.
+* Below you will find a table of the slit widths for the X-shooter data used for comparison. As you can see, the greatest width is 1.2 arcseconds. Therefore, it is an unfair comparison to compare these against SOXS data with a slit width of 5 arcseconds. All X-shooter data were taken in nodding mode, whereas the SOXS data is a mixture of stare and nodding. 
+
+| Slit Width | Frequency |
+|--------|-----------|
+| 0.4    | 1         |
+| 0.6    | 8         |
+| 0.9    | 7         |
+| 1.2    | 4         |
+| **Total** | **20** |
+
+
 
 ## What the script does
 
-`soxs_telluric_wavelength_offsets.py` compares the telluric absorption lines in SOXS NIR spectra with a list of HITRAN line positions. It also loads archival X-Shooter spectra of the same kind of target and shows them in the overview figure. The script does these steps:
+
 
 1. Load the HITRAN line list and convert it from vacuum to air wavelengths (see [Wavelength conversion](#wavelength-conversion)). Choose the reference line: the line closest to the center of `SHIFT_REFERENCE_WINDOW`.
 2. Load the SOXS spectra (`*_EXTRACTED_ME*.fits` in `SOXS_ROOT`). Keep a spectrum only if its `OBS NAME` (or `OBJECT`) header contains `SOXS_MATCH_STRING`. Skip files with `NOTFLAT` or `ERROR` in the name. Load the X-Shooter spectra in the same way with `XSHOOTER_MATCH_STRING`.
